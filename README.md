@@ -800,13 +800,27 @@ session list or the session details. The page then has three other columns:
   name says Needs you). Below them, Add a workspace, a dashed tile, and at
   the bottom, the settings.
 - **The workspace,** with its header in one row: its icon and name, its
-  dashboards as tabs after them once there are dashboards, then Storage,
-  Sessions and Memory, which is to come and says Later, and at the end the
-  button that hides and shows the side chat. Pressing the icon or the name
-  opens a picker of its icon and colour: the six project colours, and a
-  search over about sixty of Phosphor's icons that suit a project. A colour
-  applies at once; an icon applies and closes the picker. Both are kept in
-  evie's database, and every tile on the page shows them.
+  dashboards as tabs after them when the workspace defines any, then
+  Storage, Sessions and Memory (which is to come and says Later) pinned to
+  the right, and at the end the button that hides and shows the side chat.
+  Pressing the icon or the name opens a picker of its icon and colour: the
+  six project colours, and a search over about sixty of Phosphor's icons
+  that suit a project. A colour applies at once; an icon applies and closes
+  the picker. Both are kept in evie's database, and every tile on the page
+  shows them.
+- **Dashboards** are tabs configured in a trusted project's `.evie/evie.json`
+  under `"dashboards"`. Each entry is either a static HTML file inside
+  `.evie/` (`{ "name": "Summary", "path": "dashboards/summary.html" }`,
+  served through a scoped `/preview` pass) or a live local web app on a
+  loopback address (`{ "name": "Metrics", "url": "http://127.0.0.1:4100",
+  "start": "bun run dev", "idle": 15 }`). Live apps with a `"start"` command
+  are started on demand when their tab opens, kept running while viewed via
+  a heartbeat, stopped cleanly after their idle timeout (or when the server
+  stops), and capped so runaway apps do not pile up. Evie's server proxies
+  live dashboards at `/dashboard/<pass>/…`, stripping evie's own sign-in
+  credentials, and draws every dashboard in a sandboxed iframe without
+  `allow-same-origin`. When a workspace has dashboards, opening it lands on
+  its first dashboard; otherwise it opens on Sessions.
 - **Sessions** lists the project's sessions, each with Needs you, Working,
   Done or how long ago it was active. Picking one opens it in the session
   view.
@@ -846,13 +860,17 @@ session list or the session details. The page then has three other columns:
   folder already there, such as a code repository, is added as a project
   the same way. What the server refuses, it says in its own words.
 
-The address keeps where you are, as `#workspace=<project id>&tab=storage`,
-with `&chat=<session id>` for the side chat's session and `&file=<path>`
-for a file open in Storage. Where the workspace and the side chat no
-longer fit side by side, under 880px beside the strip, as on a phone or
-an upright tablet, the strip stays a column on the left and the side chat
-stacks below the workspace, a screen high. The header stays one row: the
-name is cut down to 96px at the least, and then the tabs scroll sideways.
+The address keeps where you are: `#workspace=<project id>` opens the
+workspace's default tab (its first dashboard when it has dashboards, or
+Sessions when it has none), `#workspace=<project id>&tab=dashboard&dashboard=<slug>`
+opens a specific dashboard, and `#workspace=<project id>&tab=storage` or
+`&tab=sessions` opens those tabs, with `&chat=<session id>` for the side
+chat's session and `&file=<path>` for a file open in Storage. Where the
+workspace and the side chat no longer fit side by side, under 880px beside
+the strip, as on a phone or an upright tablet, the strip stays a column on
+the left and the side chat stacks below the workspace, a screen high. The
+header stays one row: the name is cut down to 96px at the least, and then
+the tabs scroll sideways.
 
 ### Attachments
 

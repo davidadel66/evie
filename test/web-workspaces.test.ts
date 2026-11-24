@@ -1,33 +1,71 @@
 import { expect, test } from "bun:test"
-import type { SessionSummary } from "../src/core/types.ts"
+import type { DashboardEntry, SessionSummary } from "../src/core/types.ts"
 import { addressAsOpened, lookedAt, selectedIn } from "../web/src/address.ts"
 import { PROJECT_ICONS, searchIcons } from "../web/src/project-icons.ts"
 import { lookOf } from "../web/src/project-look.ts"
 import { projectColour } from "../web/src/session-list.ts"
-import { addressOfWorkspace, chatAddress, chatShown, latestSession, needsYou, newChat, sessionStatus, sessionsOf, setChatShown, sizeWords, suggestedFolder, workspaceIn } from "../web/src/workspace.ts"
+import {
+  addressOfWorkspace,
+  chatAddress,
+  chatShown,
+  latestSession,
+  needsYou,
+  newChat,
+  resolveWorkspaceTab,
+  sessionStatus,
+  sessionsOf,
+  setChatShown,
+  sizeWords,
+  suggestedFolder,
+  workspaceIn,
+} from "../web/src/workspace.ts"
 
 // The workspace view's rules, apart from its screen: where the owner is,
 // kept in the address; the project's icon and colour; the icons to pick
 // from; and which sessions a workspace shows.
 
-test("a workspace is kept in the address with its tab, the session in its side chat and the file open in Storage", () => {
+test("a workspace is kept in the address with its tab, dashboard, side chat session and Storage file", () => {
+  expect(addressOfWorkspace({ workspace: "p1" })).toBe("#workspace=p1")
   expect(addressOfWorkspace({ workspace: "p1", tab: "sessions" })).toBe("#workspace=p1&tab=sessions")
+  expect(addressOfWorkspace({ workspace: "p1", tab: "dashboard", dashboard: "cash-flow", chat: "s1" })).toBe("#workspace=p1&tab=dashboard&dashboard=cash-flow&chat=s1")
   expect(addressOfWorkspace({ workspace: "p1", tab: "storage", chat: "s1", file: "files/notes.md" })).toBe("#workspace=p1&tab=storage&chat=s1&file=files%2Fnotes.md")
   expect(workspaceIn("#workspace=p1&tab=storage&chat=s1&file=files%2Fnotes.md")).toEqual({ workspace: "p1", tab: "storage", chat: "s1", file: "files/notes.md" })
-  expect(workspaceIn("#workspace=p1&chat=new")).toEqual({ workspace: "p1", tab: "sessions", chat: "new" })
+  expect(workspaceIn("#workspace=p1&tab=dashboard&dashboard=cash-flow&chat=s1")).toEqual({ workspace: "p1", tab: "dashboard", dashboard: "cash-flow", chat: "s1" })
+  expect(workspaceIn("#workspace=p1&chat=new")).toEqual({ workspace: "p1", chat: "new" })
 })
 
-test("a workspace opens on Sessions when its tab is missing or not one there is, and a file is open only in Storage", () => {
-  expect(workspaceIn("#workspace=p1")).toEqual({ workspace: "p1", tab: "sessions" })
-  expect(workspaceIn("#workspace=p1&tab=memory")).toEqual({ workspace: "p1", tab: "sessions" })
-  expect(workspaceIn("#workspace=p1&tab=sessions&file=a.md")).toEqual({ workspace: "p1", tab: "sessions" })
+test("missing, unknown or incomplete workspace tabs leave tab undefined for the default tab, and stale params are dropped", () => {
+  expect(workspaceIn("#workspace=p1")).toEqual({ workspace: "p1" })
+  expect(workspaceIn("#workspace=p1&tab=memory")).toEqual({ workspace: "p1" })
+  expect(workspaceIn("#workspace=p1&tab=dashboard")).toEqual({ workspace: "p1" })
+  expect(workspaceIn("#workspace=p1&tab=dashboard&dashboard=")).toEqual({ workspace: "p1" })
+  expect(workspaceIn("#workspace=p1&tab=dashboard&dashboard=cash-flow&file=a.md")).toEqual({ workspace: "p1", tab: "dashboard", dashboard: "cash-flow" })
+  expect(workspaceIn("#workspace=p1&tab=sessions&file=a.md&dashboard=cash-flow")).toEqual({ workspace: "p1", tab: "sessions" })
+  expect(addressOfWorkspace({ workspace: "p1", tab: "dashboard" })).toBe("#workspace=p1")
+  expect(addressOfWorkspace({ workspace: "p1", tab: "sessions", dashboard: "cash-flow", file: "a.md" })).toBe("#workspace=p1&tab=sessions")
   expect(workspaceIn("#workspace=&tab=storage")).toBeUndefined()
   expect(workspaceIn("#session=s1")).toBeUndefined()
   expect(selectedIn("#workspace=p1&tab=storage")).toBeUndefined()
 })
 
+test("resolveWorkspaceTab opens on the first dashboard by default or when a slug is missing, and falls back to Sessions when there are none", () => {
+  const cashFlow: DashboardEntry = { id: "cash-flow", name: "Cash Flow", kind: "static", path: "dashboards/cash.html" }
+  const metrics: DashboardEntry = { id: "metrics", name: "Metrics", kind: "live", url: "http://127.0.0.1:4100" }
+  const dashboards: DashboardEntry[] = [cashFlow, metrics]
+
+  expect(resolveWorkspaceTab({ workspace: "p1" }, dashboards)).toEqual({ tab: "dashboard", dashboard: cashFlow })
+  expect(resolveWorkspaceTab({ workspace: "p1" }, [])).toEqual({ tab: "sessions" })
+  expect(resolveWorkspaceTab({ workspace: "p1", tab: "dashboard", dashboard: "metrics" }, dashboards)).toEqual({ tab: "dashboard", dashboard: metrics })
+  expect(resolveWorkspaceTab({ workspace: "p1", tab: "dashboard", dashboard: "deleted" }, dashboards)).toEqual({ tab: "dashboard", dashboard: cashFlow })
+  expect(resolveWorkspaceTab({ workspace: "p1", tab: "dashboard", dashboard: "deleted" }, [])).toEqual({ tab: "sessions" })
+  expect(resolveWorkspaceTab({ workspace: "p1", tab: "storage" }, dashboards)).toEqual({ tab: "storage" })
+  expect(resolveWorkspaceTab({ workspace: "p1", tab: "sessions" }, dashboards)).toEqual({ tab: "sessions" })
+})
+
 test("the page keeps a workspace in its address as it opens, without a sign-in code", () => {
   expect(addressAsOpened("#workspace=p1&tab=storage&file=a.md&code=abc")).toBe("/#workspace=p1&tab=storage&file=a.md")
+  expect(addressAsOpened("#workspace=p1&tab=dashboard&dashboard=cash-flow&code=abc")).toBe("/#workspace=p1&tab=dashboard&dashboard=cash-flow")
+  expect(addressAsOpened("#workspace=p1&code=abc")).toBe("/#workspace=p1")
   expect(addressAsOpened("#session=s1&code=abc")).toBe("/#session=s1")
 })
 

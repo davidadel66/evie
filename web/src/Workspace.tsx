@@ -1,10 +1,12 @@
 import { useEffect, useState, useSyncExternalStore } from "react"
-import type { ListedProject } from "../../src/core/types.ts"
+import type { DashboardEntry, ListedProject } from "../../src/core/types.ts"
 import { addressOf } from "./address.ts"
 import { Button, buttonVariants } from "./components/ui/button.tsx"
 import type { Connection, ConnectionState } from "./connection.ts"
 import { Placeholder } from "./Conversation.tsx"
 import { ConnectionLine } from "./ConnectionLine.tsx"
+import { DashboardView } from "./DashboardView.tsx"
+import { openDashboards, type Dashboards, type DashboardsState } from "./dashboards.ts"
 import { IconPicker } from "./IconPicker.tsx"
 import { GearSix, List, Plus, SidebarRight } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
@@ -14,7 +16,18 @@ import { openSettings, sessionViewLeft } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { Later, StorageView } from "./StorageView.tsx"
-import { addressOfWorkspace, NEW_CHAT, needsYou, sessionStatus, sessionsOf, setChatShown, type SessionStatus, type WorkspacePlace, type WorkspaceTab } from "./workspace.ts"
+import {
+  addressOfWorkspace,
+  NEW_CHAT,
+  needsYou,
+  resolveWorkspaceTab,
+  sessionStatus,
+  sessionsOf,
+  setChatShown,
+  type ResolvedWorkspaceTab,
+  type SessionStatus,
+  type WorkspacePlace,
+} from "./workspace.ts"
 import { SideChat, useChatShown } from "./WorkspaceChat.tsx"
 
 // The workspace view: a project's home. The strip of every workspace on
@@ -49,13 +62,7 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
                 {list.projects.length > 0 && <Placeholder title="This workspace is not in the list" text="Pick another in the strip, or make a new one there." />}
               </>
             ) : (
-              <>
-                <Header project={project} place={place} chatShown={chatShown} connection={connection} sessions={sessions} />
-                <ConnectionLine state={state} />
-                <div className="flex min-h-0 flex-1 flex-col @workspace-columns:overflow-y-auto">
-                  {place.tab === "storage" ? <StorageView connection={connection} project={project} place={place} now={now} /> : <SessionsTab list={list} place={place} now={now} />}
-                </div>
-              </>
+              <WorkspaceContent project={project} place={place} state={state} chatShown={chatShown} connection={connection} sessions={sessions} list={list} now={now} />
             )}
           </main>
           {/* Hidden, it stays on the page, so that a chat starting goes on starting. */}
@@ -77,7 +84,10 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
 // edge, each with a dot while a session in it needs the owner, then Add a
 // workspace as a dashed tile, and the settings at the bottom. Moving to
 // another workspace keeps the tab.
+// Moving to another workspace keeps Storage or Sessions, and drops any
+// dashboard tab so the chosen workspace opens on its own default tab.
 function Strip({ list, place, back, connection, sessions }: { list: SessionList; place: WorkspacePlace; back: string; connection: Connection; sessions: Sessions }) {
+  const carryTab = place.tab === "storage" || place.tab === "sessions" ? place.tab : undefined
   return (
     <nav aria-label="Workspaces" className="flex w-rail-width shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-line bg-bg-side py-2">
       <a href={back} aria-label="Back to the session list" title="Back to the session list" className={cn(buttonVariants({ variant: "icon" }), "size-tile-strip [&>svg]:size-icon-md")}>
@@ -91,7 +101,7 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
           return (
             <li key={project.id} className="flex shrink-0">
               <a
-                href={addressOfWorkspace({ workspace: project.id, tab: place.tab })}
+                href={addressOfWorkspace({ workspace: project.id, ...(carryTab !== undefined && { tab: carryTab }) })}
                 aria-current={current ? "page" : undefined}
                 aria-label={waiting ? `${project.name}, Needs you` : project.name}
                 title={project.name}
@@ -122,33 +132,127 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
   )
 }
 
+const EMPTY_DASHBOARDS: DashboardsState = { listed: false, dashboards: [] }
+const noopSubscribe = () => () => {}
+
+// Loads this project's configured dashboards, resolves which tab is active,
+// and holds off drawing the default tab until the dashboards list has arrived
+// so a workspace with dashboards does not flash Sessions first.
+function WorkspaceContent({
+  project,
+  place,
+  state,
+  chatShown,
+  connection,
+  sessions,
+  list,
+  now,
+}: {
+  project: ListedProject
+  place: WorkspacePlace
+  state: ConnectionState
+  chatShown: boolean
+  connection: Connection
+  sessions: Sessions
+  list: SessionList
+  now: number
+}) {
+  const [opened, setOpened] = useState<{ project: string; dashboards: Dashboards }>()
+  useEffect(() => {
+    const next = openDashboards(connection, project.id)
+    setOpened({ project: project.id, dashboards: next })
+    return () => next.close()
+  }, [connection, project.id])
+
+  const active = opened?.project === project.id ? opened.dashboards : undefined
+  const dashState = useSyncExternalStore(active?.subscribe ?? noopSubscribe, active?.state ?? (() => EMPTY_DASHBOARDS))
+  const waitingForDashboards = !dashState.listed && (place.tab === undefined || place.tab === "dashboard")
+  const resolved: ResolvedWorkspaceTab | undefined = waitingForDashboards ? undefined : resolveWorkspaceTab(place, dashState.dashboards)
+
+  return (
+    <>
+      <Header project={project} place={place} dashboards={dashState.dashboards} resolved={resolved} chatShown={chatShown} connection={connection} sessions={sessions} />
+      <ConnectionLine state={state} />
+      <div className="flex min-h-0 flex-1 flex-col @workspace-columns:overflow-y-auto">
+        {resolved === undefined ? (
+          <div className="flex-1 bg-bg" />
+        ) : resolved.tab === "dashboard" ? (
+          <DashboardView connection={connection} project={project} dashboard={resolved.dashboard} />
+        ) : resolved.tab === "storage" ? (
+          <StorageView connection={connection} project={project} place={place} now={now} />
+        ) : (
+          <SessionsTab list={list} place={place} now={now} />
+        )}
+      </div>
+    </>
+  )
+}
+
 // The workspace's header, in one row: its tile and name, which open the
-// picker of its icon and colour; its dashboards as tabs, none yet; Storage,
-// Sessions and Memory pinned to the right, Memory not yet there; and the
-// toggle that hides and shows the side chat. Where the row is short, the
-// name gives way, cut with an ellipsis, down to a width it always keeps,
+// picker of its icon and colour; its dashboards as tabs after its name;
+// Storage, Sessions and Memory pinned to the right, Memory not yet there;
+// and the toggle that hides and shows the side chat. Where the row is short,
+// the name gives way, cut with an ellipsis, down to a width it always keeps,
 // and then the tabs scroll sideways. The open tab's line lies on the
 // header's own line.
-function Header({ project, place, chatShown, connection, sessions }: { project: ListedProject; place: WorkspacePlace; chatShown: boolean; connection: Connection; sessions: Sessions }) {
+function Header({
+  project,
+  place,
+  dashboards,
+  resolved,
+  chatShown,
+  connection,
+  sessions,
+}: {
+  project: ListedProject
+  place: WorkspacePlace
+  dashboards: readonly DashboardEntry[]
+  resolved: ResolvedWorkspaceTab | undefined
+  chatShown: boolean
+  connection: Connection
+  sessions: Sessions
+}) {
   const toggle = chatShown ? "Hide the chat" : "Show the chat"
   return (
     <header className="flex h-header-height shrink-0 items-stretch gap-4 border-b border-line pr-3 pl-gutter @workspace-columns:gap-6">
-      <h1 className="flex flex-1 items-center">
+      <h1 className="flex min-w-0 shrink items-center">
         <IconPicker connection={connection} sessions={sessions} project={project}>
-          <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control items-center gap-2 rounded-md px-2">
+          <button type="button" title="Pick its icon and colour" className="-ml-2 flex h-control max-w-full items-center gap-2 rounded-md px-2">
             <ProjectTile project={project.id} size="header" />
             <span className="min-w-workspace-name truncate text-title text-text">{project.name}</span>
           </button>
         </IconPicker>
       </h1>
-      {/* A workspace's dashboards will be tabs here, after its name. */}
-      <nav aria-label="Workspace" className="-mb-(--line-width) flex min-w-0 items-stretch gap-6 overflow-x-auto">
-        <Tab name="Storage" tab="storage" place={place} />
-        <Tab name="Sessions" tab="sessions" place={place} />
-        <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">
-          Memory
-          <Later />
-        </span>
+      <nav aria-label="Workspace" className="-mb-(--line-width) flex min-w-0 flex-1 items-stretch gap-6 overflow-x-auto">
+        {dashboards.map((entry) => (
+          <Tab
+            key={entry.id}
+            name={entry.name}
+            href={addressOfWorkspace({
+              workspace: place.workspace,
+              tab: "dashboard",
+              dashboard: entry.id,
+              ...(place.chat !== undefined && { chat: place.chat }),
+            })}
+            current={resolved?.tab === "dashboard" && resolved.dashboard.id === entry.id}
+          />
+        ))}
+        <div className="ml-auto flex shrink-0 items-stretch gap-6">
+          <Tab
+            name="Storage"
+            href={addressOfWorkspace({ workspace: place.workspace, tab: "storage", ...(place.chat !== undefined && { chat: place.chat }) })}
+            current={resolved?.tab === "storage"}
+          />
+          <Tab
+            name="Sessions"
+            href={addressOfWorkspace({ workspace: place.workspace, tab: "sessions", ...(place.chat !== undefined && { chat: place.chat }) })}
+            current={resolved?.tab === "sessions"}
+          />
+          <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">
+            Memory
+            <Later />
+          </span>
+        </div>
       </nav>
       <Button variant="icon" aria-label={toggle} title={toggle} onClick={() => setChatShown(!chatShown)} className="shrink-0 self-center">
         <SidebarRight />
@@ -158,11 +262,10 @@ function Header({ project, place, chatShown, connection, sessions }: { project: 
 }
 
 // A tab, the one open in `text` over a 2px line, the others muted.
-function Tab({ name, tab, place }: { name: string; tab: WorkspaceTab; place: WorkspacePlace }) {
-  const current = place.tab === tab
+function Tab({ name, href, current }: { name: string; href: string; current: boolean }) {
   return (
     <a
-      href={addressOfWorkspace({ workspace: place.workspace, tab, ...(place.chat !== undefined && { chat: place.chat }) })}
+      href={href}
       aria-current={current ? "page" : undefined}
       className="relative flex shrink-0 items-center text-label text-text-muted hover:text-text aria-[current=page]:text-text"
     >
