@@ -117,8 +117,24 @@ export function ownEvie(project: string, dataFolder: string): string | undefined
   return evie
 }
 
+// The `.evie/` folder a plugin keeps a project's files in, so that Storage
+// shows them: the folder as it really is, or where it is to be made, in the
+// project as it really is, when it is not made yet. Nothing for a project
+// that is not there, or whose `.evie` Storage would not show.
+export function storageFolder(project: string, dataFolder: string): string | undefined {
+  let evie: string | undefined
+  try {
+    evie = ownEvie(project, dataFolder)
+  } catch {
+    return undefined
+  }
+  if (evie !== undefined) return evie
+  const folder = realNow(project)
+  return folder === undefined ? undefined : join(folder, ".evie")
+}
+
 // A path with its links resolved, at once, or nothing when it leads nowhere.
-function realNow(path: string): string | undefined {
+export function realNow(path: string): string | undefined {
   try {
     return realpathSync(path)
   } catch {

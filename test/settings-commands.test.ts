@@ -217,7 +217,7 @@ test("a plugin is checked in a fresh process, with the plugins the server would 
   expect(await refused({ addPlugin: notAPlugin })).toBe(
     `The file ${notAPlugin} does not export a plugin. Its default export must be an object with a name and a setup function, or a function that returns one.`,
   )
-  expect(await refused({ addPlugin: "guard" })).toBe(`In ${join(home, "evie.json")}, "addPlugins" must be a list of paths to plugin files.`)
+  expect(await refused({ addPlugin: "no-such-plugin" })).toBe(`In ${join(home, "evie.json")}, "addPlugins" must be a list of paths to plugin files, or names of built-in plugins.`)
   expect(await refused({ addPlugin: "files" })).toBe(`"files" is in the list of plugins in ${join(home, "evie.json")} already.`)
   expect(await refused({ removePlugin: "/made/up/never-added.ts" })).toBe(
     `"/made/up/never-added.ts" was not added from the settings window, so it is left as it is. It is taken off "plugins" in ${join(home, "evie.json")} by hand.`,

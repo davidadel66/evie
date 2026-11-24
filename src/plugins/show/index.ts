@@ -3,7 +3,7 @@ import { copyFile, mkdir, rm, stat } from "node:fs/promises"
 import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path"
 import { folderAt, numbered, today } from "../../core/attachments.ts"
 import { dataFolder } from "../../core/evie.ts"
-import { ownEvie } from "../../core/storage.ts"
+import { storageFolder } from "../../core/storage.ts"
 import type { Plugin, Tool, ToolContext, ToolOutput } from "../../core/types.ts"
 import { displayPath, resolvePath } from "../files/paths.ts"
 import { findCompanions } from "./companions.ts"
@@ -34,17 +34,8 @@ export function show(options: ShowOptions = {}): Plugin {
   // Storage would not show, its own folder in the data folder.
   function storageFor(session: string, folder: string | null): { root: string; project: boolean } {
     const own = { root: ownShownFolder(realOrNothing(home) ?? home, session), project: false }
-    if (folder === null) return own
-    let evie: string | undefined
-    try {
-      evie = ownEvie(folder, home)
-    } catch {
-      return own
-    }
-    if (evie !== undefined) return { root: evie, project: true }
-    // A project's `.evie` folder not made yet is made where the project really is.
-    const project = realOrNothing(folder)
-    return project === undefined ? own : { root: join(project, ".evie"), project: true }
+    const evie = folder === null ? undefined : storageFolder(folder, home)
+    return evie === undefined ? own : { root: evie, project: true }
   }
 
   const tool: Tool = {

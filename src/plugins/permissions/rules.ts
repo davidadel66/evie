@@ -65,7 +65,9 @@ export type Act = {
 
 const READ_TOOLS = ["read", "grep", "glob"]
 const EDIT_TOOLS = ["write", "edit", "patch"]
-const WEB_TOOLS = ["web_search", "web_fetch"]
+// Reading YouTube's captions is using the web too: what it keeps, it keeps in
+// Storage, as show does.
+const WEB_TOOLS = ["web_search", "web_fetch", "youtube"]
 // The actions the plugin understands. Anything else is a tool it knows nothing about.
 const KNOWN = ["read", "edit", "shell", "web", "outside", "ask", "job_stop", "subagent", "subagent_send", "skill"]
 
