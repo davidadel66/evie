@@ -21,5 +21,5 @@ export async function toolProject(plugins: Plugin[], contents: Record<string, st
     const results = stored(run.events).flatMap((event) => (event.type === "tool_result" ? [event.body.text] : []))
     return results.at(-1)!
   }
-  return { run, call, path, text: (name: string) => readFile(path(name), "utf8") }
+  return { run, call, path, script, text: (name: string) => readFile(path(name), "utf8") }
 }
