@@ -971,10 +971,56 @@ pauses, and `evie` catches up when it wakes. On other systems, run
 | `web_search` | Searches the internet |
 | `web_fetch` | Reads a web page as text |
 | `ask` | Asks you a question with choices, and waits for your answer |
+| `youtube` | Gets the transcript of a YouTube video, playlist or channel (off by default; see below) |
 
 Models differ in which tools they handle well. Evie gives GPT models `patch`
 and every other model `edit` and `write`, each with a system prompt written
 for it.
+
+### YouTube transcripts
+
+Give evie a YouTube link and it can read the video's transcript, so a talk
+or a tutorial can be part of what it works from. The `youtube` tool takes
+the link to a video, a playlist or a channel:
+
+- **A video:** its transcript is fetched at once, saved, and given to the
+  model.
+- **A playlist or a channel:** the transcripts are fetched one video after
+  another as a background job, at most 50: a channel's newest videos (from
+  its Videos tab, unless the link names another, such as its Shorts), or a
+  playlist's first. The model is told when they are saved, with the list of
+  files, and carries on meanwhile.
+
+A transcript is the video's captions: the uploader's where there are some,
+in the video's own language, otherwise the ones YouTube makes from the
+speech, which have little punctuation and can mishear words. Another
+language can be asked for. Each is a Markdown file with a short header
+(title, channel, date, length, link, which captions) and the words in
+paragraphs of about a minute, each starting with its time, under the
+video's chapters when it has them. A video with no captions has no
+transcript: nothing is made from the sound.
+
+The files are kept in the workspace's Storage, in
+`.evie/youtube/<channel or playlist>/<title> [<video id>].md`, with an
+`index.md` beside a playlist's or a channel's. A session with no project
+keeps them with its saved tool output in the data folder: they go with the
+session, and like all saved output they are deleted a week after they were
+written. A video saved before is not fetched again, so a job that evie
+restarted in the middle of carries on from where it was.
+
+The tool reads captions with [yt-dlp](https://github.com/yt-dlp/yt-dlp),
+which keeps up with YouTube's changes, so it is off until both are done:
+
+1. Install yt-dlp: on a Mac, `brew install yt-dlp`. Keep it up to date
+   (`brew upgrade yt-dlp`), since YouTube changes often.
+2. Switch the plugin on, in `evie.json` in the data folder (see "Choosing
+   which plugins load"):
+
+   ```json
+   { "addPlugins": ["youtube"] }
+   ```
+
+The permissions treat it as using the web, which is allowed in every mode.
 
 ## Workspaces
 
@@ -1289,13 +1335,23 @@ and which plugins load.
 ```json
 {
   "model": "a-name-from/openrouter.ai-models",
-  "maxTokens": 16000
+  "maxTokens": 64000
 }
 ```
 
-`maxTokens` is the longest one reply may be. It is 16,000 unless you change
-it. OpenRouter refuses a request whose limit your credits do not cover, so
-lower it if you see that.
+`maxTokens` is the longest one reply may be, the model's thinking included.
+It is 64,000 unless you change it. Evie asks for less when the model's own
+longest reply is shorter, or when the conversation leaves less room in what
+the model can read. OpenRouter sets aside the price of a
+reply that long before each request, and refuses the request when your
+credits do not cover it, so lower it if you see that.
+
+A reply that reaches the limit is not taken as finished. Its tool calls are
+not run, since their input may be cut short, and the model is told and asked
+to go on in smaller pieces. A reply whose tool call arrived as text, which
+happens when the server running a model does not turn the model's own
+markup into a real call, is handled the same way. Three such replies in a
+row end the turn with a message that says why.
 
 **Long conversations.** Every request carries the whole conversation, so a
 long session would eventually be more than the model can read. Before that
@@ -1389,23 +1445,25 @@ Sessions are named by `anthropic/claude-haiku-5.5`, through the same
 provider as the rest. Another model is set in the plugin's options:
 `{ "use": "naming", "options": { "model": "another/model" } }`.
 
-One more built-in plugin, `guard`, is not loaded by default. It is the
-part of `permissions` that refuses the most destructive commands, by
-itself, for running Evie with no other rules.
+Two more built-in plugins are not loaded by default. `guard` is the part
+of `permissions` that refuses the most destructive commands, by itself, for
+running Evie with no other rules. `youtube` adds the `youtube` tool (see
+"YouTube transcripts"), which needs yt-dlp installed.
 
 A built-in plugin is named. A plugin of your own is given by the path to
 its file. Leaving a plugin out switches it off: without `shell`, the model
 cannot run commands.
 
-`addPlugins` lists plugin files, by their paths, to load after the list:
-after `plugins`, or after the built-in plugins when there is no `plugins`.
-The web app's settings add a plugin file here and take it off again, so
-the list of built-in plugins is left as it is. An entry that is not the
-path to a plugin file stops the server at start, as a bad entry in
-`plugins` does.
+`addPlugins` lists plugins to load after the list: after `plugins`, or
+after the built-in plugins when there is no `plugins`. Each is a plugin
+file, by its path, or a built-in plugin that is not loaded by default, by
+its name, such as `youtube`. The web app's settings add a plugin here and
+take it off again, so the list of built-in plugins is left as it is. An
+entry that is neither, or a plugin that is loaded already, stops the server
+at start, as a bad entry in `plugins` does.
 
 ```json
-{ "addPlugins": ["/path/to/my-plugin.ts"] }
+{ "addPlugins": ["/path/to/my-plugin.ts", "youtube"] }
 ```
 
 A project's own file, `.evie/evie.json` in its folder, adds plugins for that
