@@ -226,7 +226,10 @@ export type Usage = { inputTokens: number; outputTokens: number; cachedTokens?: 
 export type Chunk =
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; name: string; arguments: string }
-  | { type: "finish"; reason: "stop" | "tool_calls" | "length"; usage?: Usage }
+  // "length" is a reply cut off at its length limit. "tool_call_as_text" is
+  // one with no tool call whose text holds the model's own markup for one:
+  // the server that ran the model did not turn it into a real call.
+  | { type: "finish"; reason: "stop" | "tool_calls" | "length" | "tool_call_as_text"; usage?: Usage }
   // `tooLong` marks a request refused for being more than the model can read.
   // `refused` marks one refused as bad or too large, as for an image in it
   // the model cannot take.

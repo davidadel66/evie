@@ -34,7 +34,7 @@ import { replaceFile, type Settings } from "./settings.ts"
 // folder, which can set that project's model and reply limit, add plugins
 // for that project only, and switch off a global one.
 //
-//   { "model": "some/model", "maxTokens": 16000,
+//   { "model": "some/model", "maxTokens": 64000,
 //     "plugins": ["files", { "use": "shell" }, "/path/to/my-plugin.ts"],
 //     "trust": ["/path/to/a/project"] }
 //
