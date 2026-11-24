@@ -176,7 +176,7 @@ test("a plugin that cannot be loaded stops Evie at start, with an error that nam
   await writeFile(join(outside, "broken.ts"), "export default { name: 'broken', setup() { throw new Error('could not connect') } }")
 
   await expect(start({ plugins: ["no-such-plugin"] })).rejects.toThrow(
-    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, jobs, guard, permissions, undo, models, ask, subagents, skills, instructions, web, sync, naming, show, github, openrouter.',
+    'There is no built-in plugin named "no-such-plugin". The built-in plugins are: files, shell, jobs, guard, permissions, undo, models, ask, subagents, skills, instructions, web, sync, naming, show, github, openrouter, youtube.',
   )
   await expect(start({ plugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
   await expect(start({ plugins: [join(outside, "empty.ts")] })).rejects.toThrow("does not export a plugin")
@@ -195,7 +195,16 @@ test("plugin files under addPlugins load after the list, the built-in one when e
   expect(listed.settings.plugins.map((plugin) => plugin.name)).toEqual(["files", "openrouter", "greet"])
 
   await expect(start({ addPlugins: ["/no/such/file.ts"] })).rejects.toThrow('The plugin "/no/such/file.ts" could not be loaded')
-  await expect(start({ addPlugins: ["web"] })).rejects.toThrow(/"addPlugins" must be a list of paths to plugin files\.$/)
+  await expect(start({ addPlugins: ["no-such-plugin"] })).rejects.toThrow(/"addPlugins" must be a list of paths to plugin files, or names of built-in plugins\.$/)
+})
+
+test("a built-in plugin that is not loaded by default, such as youtube, is switched on by its name under addPlugins, and one loaded already is refused", async () => {
+  const { settings, offered } = await start({ addPlugins: ["youtube"] })
+  expect(settings.plugins.map((plugin) => plugin.name).slice(-2)).toEqual(["openrouter", "youtube"])
+  expect(await offered()).toContain("youtube")
+  expect((await start({})).settings.plugins.map((plugin) => plugin.name)).not.toContain("youtube")
+
+  await expect(start({ addPlugins: ["web"] })).rejects.toThrow(/"web" is under "addPlugins" in .*evie\.json, but it is loaded already\. Take it off "addPlugins"\.$/)
 })
 
 test("a settings file that is not valid says which file and why", async () => {

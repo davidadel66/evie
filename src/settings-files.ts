@@ -22,6 +22,7 @@ import { subagents } from "./plugins/subagents.ts"
 import { sync } from "./plugins/sync.ts"
 import { undo } from "./plugins/undo.ts"
 import { web } from "./plugins/web.ts"
+import { youtube } from "./plugins/youtube.ts"
 import { replaceFile, type Settings } from "./settings.ts"
 
 // Evie's settings files: which model to use, how long a reply may be, and
@@ -115,8 +116,9 @@ type SettingsFile = {
   // What a model can read, for a model whose limit is not known or is wrong.
   contextLimits?: Record<string, number>
   plugins?: Entry[]
-  // Plugin files loaded after the list, by their paths: the ones the
-  // settings window adds, which leaves the list as it is.
+  // Plugins loaded after the list, which is left as it is: plugin files, by
+  // their paths, as the settings window adds them, and built-in plugins not
+  // loaded by default, such as youtube, by their names.
   addPlugins?: string[]
   // How freely Evie may act: the mode sessions start in, the rules, and the
   // owner's remembered "always" answers for each project. A project's own
@@ -163,6 +165,8 @@ const BUILT_IN: Record<string, (options: Record<string, unknown>, context: Conte
   show: (_options, context) => show({ dataFolder: context.home }),
   github: () => github(),
   openrouter: (_options, context) => openrouter({ env: context.env }),
+  // Not loaded by default, since it needs a program the owner installs.
+  youtube: (_options, context) => youtube({ dataFolder: context.home }),
 }
 // `undo` comes after `permissions`, so a call that is refused is not recorded.
 const DEFAULT: Entry[] = ["files", "shell", "jobs", "permissions", "undo", "models", "ask", "subagents", "skills", "instructions", "web", "sync", "naming", "show", "github", "openrouter"]
@@ -206,6 +210,8 @@ export async function loadSettingsFiles(options: { env: Settings; adding?: strin
 
   const added = [...(global.addPlugins ?? []), ...(options.adding ?? [])]
   if (options.adding) checkSettings({ ...global, addPlugins: added }, globalFile)
+  const twice = added.find((entry) => (global.plugins ?? DEFAULT).map(nameOf).includes(entry))
+  if (twice !== undefined) throw new Error(`"${twice}" is under "addPlugins" in ${globalFile}, but it is loaded already. Take it off "addPlugins".`)
   const plugins: Plugin[] = []
   for (const entry of [...(global.plugins ?? DEFAULT), ...added]) plugins.push(await load(entry, home, context))
 
@@ -487,7 +493,7 @@ function checkSettings(parsed: unknown, file: string): SettingsFile {
   const isEntry = (item: unknown) =>
     typeof item === "string" || (typeof item === "object" && item !== null && typeof (item as { use?: unknown }).use === "string")
   listOf("plugins", isEntry, 'plugin names, paths, or { "use": ..., "options": ... } entries')
-  listOf("addPlugins", (item) => typeof item === "string" && looksLikePath(item), "paths to plugin files")
+  listOf("addPlugins", (item) => typeof item === "string" && (looksLikePath(item) || Object.hasOwn(BUILT_IN, item)), "paths to plugin files, or names of built-in plugins")
   listOf("trust", (item) => typeof item === "string", "project folders")
   listOf("untrusted", (item) => typeof item === "string", "project folders")
   listOf("disable", (item) => typeof item === "string", "plugin names")
