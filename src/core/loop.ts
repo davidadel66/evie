@@ -16,7 +16,7 @@ import { ONLY_THE_CORE_WRITES, buildRequest, type ShownImages } from "./request-
 import { branchOf } from "./projects.ts"
 import { CancelledBeforeStart, runToolCall } from "./tools.ts"
 import type { HookRunner } from "./host.ts"
-import type { Attachment, EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
+import type { Attachment, Chunk, EventBodies, EvieEvent, HookContext, Host, Project, Provider, Question, StoredEvent, ToolCall, ToolContext, Usage } from "./types.ts"
 
 export type LoopOptions = {
   session: string
@@ -109,6 +109,22 @@ function recordedBranch(events: readonly StoredEvent[]): string | undefined {
 // together, as some of the models take no more.
 const SHOWN_IMAGES = 4
 const SHOWN_BASE64 = 16 * 1024 * 1024
+
+// A reply that did not finish, by how it ended: what the model is told, and
+// what the turn's failure says when it was the last of three in a row.
+// OpenCode tells a cut-off model the same: go on, in smaller pieces.
+const UNFINISHED = {
+  length: {
+    ask: "Your last reply reached the length limit for one reply and was cut off. Continue from where it stopped, in smaller pieces: write a long file in several edits, and keep each reply short.",
+    last: "reached the length limit for one reply. Ask for the work in smaller pieces, or raise `maxTokens` in evie.json.",
+  },
+  tool_call_as_text: {
+    ask: "Your last reply wrote a tool call as text, so it did not run. Send it again as a real tool call. If you were only writing about tool-call markup, put it in backticks.",
+    last: "wrote a tool call as text instead of calling the tool. The server running this model may not handle its tool calls: try again, or switch to another model.",
+  },
+}
+// OpenCode's rule: three unfinished replies in a row end the step.
+const UNFINISHED_TRIES = 3
 
 // A promise's value, or nothing if it fails, or once the signal fires,
 // leaving nothing listening on the signal afterwards.
@@ -355,6 +371,8 @@ export function createLoop(options: LoopOptions): Loop {
     // answered, since they were what was refused.
     let withoutImages = false
     let suspect: string[] = []
+    // Replies in a row that did not finish. The third ends the turn.
+    let unfinished = 0
 
     // Moving input from the inbox to the log is one transaction, so a crash
     // can neither lose a message nor record it twice. If it fails, the turn
@@ -423,6 +441,8 @@ export function createLoop(options: LoopOptions): Loop {
         let tooLong = false
         let refused = false
         let usage: Usage | undefined
+        // How the reply ended, as the provider reported it.
+        let ended: Extract<Chunk, { type: "finish" }>["reason"] = "stop"
         const replying = (reply = new AbortController())
         // The request is halted when the turn is cancelled or the reply is steered.
         const halted = AbortSignal.any([signal, replying.signal])
@@ -440,6 +460,7 @@ export function createLoop(options: LoopOptions): Loop {
             if (chunk.type === "tool_call") calls.push({ id: chunk.id, name: chunk.name, arguments: chunk.arguments })
             // The provider reports a failed request as a value, not a throw.
             if (chunk.type === "finish") {
+              ended = chunk.reason
               if (chunk.reason === "error") {
                 failure = chunk.error
                 tooLong = chunk.tooLong === true
@@ -507,6 +528,14 @@ export function createLoop(options: LoopOptions): Loop {
           calls.length = 0
         }
 
+        // A reply that did not finish is not the final answer: one cut off at
+        // the length limit, or one whose tool call arrived as text. Its tool
+        // calls are neither run, as in pi, nor kept: their input may be cut
+        // short, and a provider may refuse a request that carries it. The
+        // model is told and asked again, in the same turn.
+        const unfinishedAs = ended === "length" || ended === "tool_call_as_text" ? UNFINISHED[ended] : undefined
+        const dropped = unfinishedAs ? calls.splice(0).map((call) => call.name) : []
+
         emit(
           log.append(session, "assistant_message", {
             text,
@@ -514,6 +543,17 @@ export function createLoop(options: LoopOptions): Loop {
             ...(usage && { usage }),
           }),
         )
+        if (unfinishedAs) {
+          if (++unfinished === UNFINISHED_TRIES) {
+            reason = "error"
+            error = `Three replies in a row did not finish, so the turn was stopped. The last one ${unfinishedAs.last}`
+            break
+          }
+          const notRun = dropped.length > 0 ? ` The tool calls in it were not run: ${dropped.join(", ")}. Send again any that are still needed.` : ""
+          emit(log.append(session, "note", { text: unfinishedAs.ask + notRun }))
+          continue
+        }
+        unfinished = 0
         // A reply that asks for no tool is the final answer.
         if (calls.length === 0) break
 
