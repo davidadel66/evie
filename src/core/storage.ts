@@ -134,7 +134,7 @@ export function storageFolder(project: string, dataFolder: string): string | und
 }
 
 // A path with its links resolved, at once, or nothing when it leads nowhere.
-function realNow(path: string): string | undefined {
+export function realNow(path: string): string | undefined {
   try {
     return realpathSync(path)
   } catch {

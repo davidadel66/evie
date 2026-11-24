@@ -210,7 +210,8 @@ export async function loadSettingsFiles(options: { env: Settings; adding?: strin
 
   const added = [...(global.addPlugins ?? []), ...(options.adding ?? [])]
   if (options.adding) checkSettings({ ...global, addPlugins: added }, globalFile)
-  const twice = added.find((entry) => (global.plugins ?? DEFAULT).map(nameOf).includes(entry))
+  const listedFirst = (global.plugins ?? DEFAULT).map(nameOf)
+  const twice = added.find((entry, at) => listedFirst.includes(entry) || added.indexOf(entry) !== at)
   if (twice !== undefined) throw new Error(`"${twice}" is under "addPlugins" in ${globalFile}, but it is loaded already. Take it off "addPlugins".`)
   const plugins: Plugin[] = []
   for (const entry of [...(global.plugins ?? DEFAULT), ...added]) plugins.push(await load(entry, home, context))

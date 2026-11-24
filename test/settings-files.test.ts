@@ -205,6 +205,7 @@ test("a built-in plugin that is not loaded by default, such as youtube, is switc
   expect((await start({})).settings.plugins.map((plugin) => plugin.name)).not.toContain("youtube")
 
   await expect(start({ addPlugins: ["web"] })).rejects.toThrow(/"web" is under "addPlugins" in .*evie\.json, but it is loaded already\. Take it off "addPlugins"\.$/)
+  await expect(start({ addPlugins: ["youtube", "youtube"] })).rejects.toThrow(/"youtube" is under "addPlugins" in .*evie\.json, but it is loaded already\./)
 })
 
 test("a settings file that is not valid says which file and why", async () => {

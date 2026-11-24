@@ -968,7 +968,8 @@ the link to a video, a playlist or a channel:
 - **A video:** its transcript is fetched at once, saved, and given to the
   model.
 - **A playlist or a channel:** the transcripts are fetched one video after
-  another as a background job, at most 50: a channel's newest videos, or a
+  another as a background job, at most 50: a channel's newest videos (from
+  its Videos tab, unless the link names another, such as its Shorts), or a
   playlist's first. The model is told when they are saved, with the list of
   files, and carries on meanwhile.
 
@@ -984,9 +985,10 @@ transcript: nothing is made from the sound.
 The files are kept in the workspace's Storage, in
 `.evie/youtube/<channel or playlist>/<title> [<video id>].md`, with an
 `index.md` beside a playlist's or a channel's. A session with no project
-keeps them with its saved tool output in the data folder, and they go with
-it. A video saved before is not fetched again, so a job that evie restarted
-in the middle of carries on from where it was.
+keeps them with its saved tool output in the data folder: they go with the
+session, and like all saved output they are deleted a week after they were
+written. A video saved before is not fetched again, so a job that evie
+restarted in the middle of carries on from where it was.
 
 The tool reads captions with [yt-dlp](https://github.com/yt-dlp/yt-dlp),
 which keeps up with YouTube's changes, so it is off until both are done:
