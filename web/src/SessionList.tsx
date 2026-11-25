@@ -37,7 +37,7 @@ export function ListTop({ connection, sessions, settings }: { connection: Connec
           <SquaresFour />
         </Button>
       ) : workspace !== undefined ? (
-        <a href={addressOfWorkspace({ workspace, tab: "sessions" })} aria-label="Workspaces" title="Workspaces" className={icon}>
+        <a href={addressOfWorkspace({ workspace })} aria-label="Workspaces" title="Workspaces" className={icon}>
           <SquaresFour />
         </a>
       ) : (

@@ -19,6 +19,8 @@ export async function serveEvie(
     // A project folder to use in place of a new temporary one. The caller removes it.
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
+    dashboardsSetting?: NonNullable<EvieOptions["dashboardsSetting"]>
+    passLasts?: number
     app?: WebApp
     signInCodeLasts?: number
     // What opens a project's folder, in place of the computer's own.
@@ -38,6 +40,7 @@ export async function serveEvie(
     ...(options.compaction && { compaction: options.compaction }),
     ...(options.projectFolder && { projectFolder: options.projectFolder }),
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
+    ...(options.dashboardsSetting && { dashboardsSetting: options.dashboardsSetting }),
     ...(options.openFolder && { openFolder: options.openFolder }),
   })
   const tokens = await openTokens(run.home)
@@ -53,8 +56,10 @@ export async function serveEvie(
     ...(options.keepaliveEvery !== undefined && { keepaliveEvery: options.keepaliveEvery }),
     ...(options.app && { app: options.app }),
     ...(options.signInCodeLasts !== undefined && { signInCodeLasts: options.signInCodeLasts }),
+    ...(options.passLasts !== undefined && { passLasts: options.passLasts }),
     attachments: run.evie.attachments,
     storage: run.evie.storage,
+    dashboards: run.evie.dashboards,
     dataFolder: run.home,
   })
   const clients: { close(): Promise<void> }[] = []

@@ -219,7 +219,7 @@ function MarkdownFull({ file, address }: { file: Shown; address: string }) {
 
 // Mints a scoped, short-lived preview pass for a file so its sandboxed iframe
 // or 3D loader can fetch relative companion files without carrying evie's cookie.
-function usePreviewUrl(storageAddress: string): { url?: string; failed?: true; remint(): void } {
+export function usePreviewUrl(storageAddress: string): { url?: string; failed?: true; remint(): void } {
   const [tick, setTick] = useState(0)
   const [state, setState] = useState<{ key: string; url?: string; failed?: true }>({ key: `${storageAddress}#${tick}` })
   const key = `${storageAddress}#${tick}`

@@ -51,7 +51,7 @@ export function NewWorkspace({
           sessions={sessions}
           made={(project) => {
             setOpen(false)
-            location.hash = addressOfWorkspace({ workspace: project, tab: "sessions" })
+            location.hash = addressOfWorkspace({ workspace: project })
           }}
         />
       </DialogContent>

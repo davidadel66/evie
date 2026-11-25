@@ -1,21 +1,32 @@
-import type { SessionSummary } from "../../src/core/types.ts"
+import type { DashboardEntry, SessionSummary } from "../../src/core/types.ts"
 import { ageWords, groupSessions } from "./session-list.ts"
 
 // The workspace view's rules, apart from its screen. A workspace is a
 // project's home: a strip of every workspace, the workspace itself with
 // its tabs, and a side chat with one of its sessions.
 
-// The workspace's tabs that are there now: Storage, its files, and Sessions.
-// Memory is to come; dashboards will be tabs too.
-export type WorkspaceTab = "storage" | "sessions"
-const TABS: readonly WorkspaceTab[] = ["storage", "sessions"]
+// The workspace's tabs: its configured dashboards, Storage (its `.evie`
+// files), and Sessions. Memory is to come.
+export type WorkspaceTab = "dashboard" | "storage" | "sessions"
 
 // Where the owner is in a workspace, as the page's address keeps it after
-// #: `#workspace=<project id>&tab=<tab>`, with `&chat=<session id>` for the
-// session in its side chat, or `&chat=new` for a new one there, and in
-// Storage, `&file=<path>` for the file open, by its path in the `.evie`
-// folder. Without `chat`, the side chat shows the workspace's latest session.
-export type WorkspacePlace = { workspace: string; tab: WorkspaceTab; chat?: string; file?: string }
+// #: `#workspace=<project id>`, with `&tab=dashboard&dashboard=<slug>`,
+// `&tab=storage` (and `&file=<path>` for a file open in `.evie`), or
+// `&tab=sessions`. When `tab` is undefined, the workspace opens on its
+// default tab: its first dashboard when it has dashboards, or Sessions
+// when it has none. `&chat=<session id>` keeps the session in its side
+// chat, or `&chat=new` for a new one there; without `chat`, the side chat
+// shows the workspace's latest session.
+export type WorkspacePlace = {
+  workspace: string
+  tab?: WorkspaceTab
+  dashboard?: string
+  chat?: string
+  file?: string
+}
+
+// The concrete tab the workspace shows, once its dashboards have been listed.
+export type ResolvedWorkspaceTab = { tab: "dashboard"; dashboard: DashboardEntry } | { tab: "storage" } | { tab: "sessions" }
 
 // The side chat's `chat` for a new session, which no session's id can be:
 // ids are UUIDs.
@@ -54,16 +65,40 @@ export function onChatShown(listener: () => void): () => void {
 }
 
 // The workspace an address's part after # is in, or undefined for none.
-// It opens on Sessions, until it has dashboards to open on.
+// A missing, unknown, or incomplete tab is left undefined so the workspace
+// opens on its default tab (its first dashboard, or Sessions when it has none).
 export function workspaceIn(hash: string): WorkspacePlace | undefined {
   const named = new URLSearchParams(hash.replace(/^#/, ""))
   const workspace = named.get("workspace")
   if (workspace === null || workspace === "") return undefined
   const asked = named.get("tab")
-  const tab = TABS.find((each) => each === asked) ?? "sessions"
+  const dashboard = named.get("dashboard")
   const chat = named.get("chat")
   const file = named.get("file")
-  return { workspace, tab, ...(chat !== null && chat !== "" && { chat }), ...(tab === "storage" && file !== null && file !== "" && { file }) }
+  let tab: WorkspaceTab | undefined
+  if (asked === "storage" || asked === "sessions") tab = asked
+  else if (asked === "dashboard" && dashboard !== null && dashboard !== "") tab = "dashboard"
+  return {
+    workspace,
+    ...(tab !== undefined && { tab }),
+    ...(tab === "dashboard" && dashboard !== null && dashboard !== "" && { dashboard }),
+    ...(chat !== null && chat !== "" && { chat }),
+    ...(tab === "storage" && file !== null && file !== "" && { file }),
+  }
+}
+
+// Which tab a workspace shows for `place`, given the dashboards listed for it.
+// Opens on the first dashboard when no tab is chosen or a dashboard slug is not
+// found, and falls back to Sessions when the workspace has no dashboards.
+export function resolveWorkspaceTab(place: WorkspacePlace, dashboards: readonly DashboardEntry[]): ResolvedWorkspaceTab {
+  if (place.tab === "storage") return { tab: "storage" }
+  if (place.tab === "sessions") return { tab: "sessions" }
+  if (place.tab === "dashboard" && place.dashboard !== undefined) {
+    const found = dashboards.find((entry) => entry.id === place.dashboard)
+    if (found !== undefined) return { tab: "dashboard", dashboard: found }
+  }
+  const first = dashboards[0]
+  return first !== undefined ? { tab: "dashboard", dashboard: first } : { tab: "sessions" }
 }
 
 // What New session does in a workspace, from the address's part after #:
@@ -78,7 +113,13 @@ export function newChat(hash: string): string | undefined {
 
 // The part after # for a place in a workspace.
 export function addressOfWorkspace(place: WorkspacePlace): string {
-  const named = new URLSearchParams({ workspace: place.workspace, tab: place.tab })
+  const named = new URLSearchParams({ workspace: place.workspace })
+  if (place.tab === "dashboard" && place.dashboard !== undefined && place.dashboard !== "") {
+    named.set("tab", "dashboard")
+    named.set("dashboard", place.dashboard)
+  } else if (place.tab === "storage" || place.tab === "sessions") {
+    named.set("tab", place.tab)
+  }
   if (place.chat !== undefined) named.set("chat", place.chat)
   if (place.file !== undefined && place.tab === "storage") named.set("file", place.file)
   return `#${named}`

@@ -203,7 +203,7 @@ function Searching({ connection, sessions, run }: { connection: Connection; sess
               keywords: [project.folder],
               folder: project.folder,
               icon: <ProjectGlyph project={project.id} />,
-              run: () => (location.hash = addressOfWorkspace({ workspace: project.id, tab: "sessions" })),
+              run: () => (location.hash = addressOfWorkspace({ workspace: project.id })),
             }),
           ),
         },

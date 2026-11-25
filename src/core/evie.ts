@@ -2,6 +2,8 @@ import { mkdir, rm } from "node:fs/promises"
 import { homedir } from "node:os"
 import { isAbsolute, join, relative, sep } from "node:path"
 import { createTurnChanges, readBranch, readBranchSides, readUncommitted, readUncommittedSides } from "./changes.ts"
+import { createDashboardRunner, type DashboardRunnerOptions } from "./dashboard-runner.ts"
+import { readDashboards } from "./dashboards.ts"
 import { createHost, type HookRunner } from "./host.ts"
 import { createInbox } from "./inbox.ts"
 import { createJobs, EndNotKnown, readOutput } from "./jobs.ts"
@@ -52,6 +54,12 @@ export type EvieOptions = {
   // count only once it is trusted: undefined when they set nothing, or it
   // is not trusted. A list of projects says which are backed up by it.
   syncSetting?: (project: Project) => Promise<"private" | "none" | undefined>
+  // A project's `dashboards` list, by its own settings, read each time it is
+  // asked: undefined when they set none, or the project is not trusted.
+  dashboardsSetting?: (project: Project) => Promise<unknown>
+  // How long a live dashboard's app may go unasked for before it is
+  // stopped, and how many may run at once.
+  liveDashboards?: Pick<DashboardRunnerOptions, "idleMinutes" | "mostRunning">
   // How often, in milliseconds, sessions are looked at for any that a week
   // of quiet has settled, to send their summaries: nothing happens in a
   // session to tell of it. Once an hour when left out, which is for tests to change.
@@ -253,6 +261,7 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     emit,
     tell: (session, text, wake, kept) => sessions.get(session)?.loop.tell(text, wake, kept),
   })
+  const dashboardApps = createDashboardRunner({ logFolder: join(home, "dashboard-logs"), ...options.liveDashboards })
 
   // Each session open in this process: its turn loop, its project and that
   // project's plugin host. `canAnswer` says whether its client shows questions.
@@ -1089,6 +1098,19 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
     return project
   }
 
+  // A project's dashboards, from its settings as they are now, so that an
+  // edit to them, or the project no longer being trusted, holds at once.
+  async function dashboardsOf(project: Project) {
+    return readDashboards(await options.dashboardsSetting?.(project), project.folder, home)
+  }
+
+  // A live dashboard of a project in the list, by their ids, or undefined.
+  async function liveDashboard(projectId: string, id: string) {
+    const project = typeof projectId === "string" ? projects.get(projectId) : undefined
+    const entry = project && (await dashboardsOf(project)).find((each) => each.id === id)
+    return project && entry?.kind === "live" ? { project, entry } : undefined
+  }
+
   // Opens a session again in this process, to pick up what was left in it.
   // A subagent's is opened by the session that started it, which is opened first.
   async function reopen(session: string): Promise<void> {
@@ -1107,6 +1129,19 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       async open(id, path) {
         const project = typeof id === "string" ? projects.get(id) : undefined
         return project && typeof path === "string" ? storageFileAt(project.folder, path, home) : undefined
+      },
+    },
+    dashboards: {
+      async open(projectId, id, how) {
+        const found = await liveDashboard(projectId, id)
+        if (found === undefined) return { status: "failed", message: `There is no live dashboard "${id}" in this workspace's .evie/evie.json now.` }
+        const { project, entry } = found
+        const app = { project: project.id, folder: project.folder, dashboard: entry.id, url: entry.url, ...(entry.start !== undefined && { start: entry.start }) }
+        const opened = await dashboardApps.ensure(app, stopping.signal, how)
+        return opened.ok ? { status: "ready", url: entry.url, started: opened.started } : { status: opened.status, message: opened.message, ...(opened.log !== undefined && { log: opened.log }) }
+      },
+      async address(projectId, id) {
+        return (await liveDashboard(projectId, id))?.entry.url
       },
     },
     async send(command) {
@@ -1192,6 +1227,8 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await (options.openFolder ?? openOnThisComputer)(projectFor(command.project).folder)) as Output
         case "read_git_status":
           return (await readGitStatus(projectFor(command.project), typeof command.base === "string" ? command.base : undefined)) as Output
+        case "list_dashboards":
+          return { dashboards: await dashboardsOf(projectFor(command.project)) } as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)
@@ -1224,8 +1261,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       clearInterval(quietCheck)
       if (how.restart) {
         // Nothing more is written from here: the log is left as a crash
-        // would leave it, for the next start to pick up.
+        // would leave it, for the next start to pick up. The dashboards'
+        // apps are stopped, since nothing would stop them after.
         jobs.leave()
+        await dashboardApps.close()
         db.close()
         return
       }
@@ -1233,10 +1272,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       questions.refuseAll()
       // Jobs are marked and noted as stopped by the closing first, while
       // the sessions that started them can still record it. Then the turns
-      // are stopped, and then the jobs are waited for.
+      // are stopped, and then the jobs and the dashboards' apps are waited for.
       const jobsStopped = jobs.stopAll()
+      const dashboardsStopped = dashboardApps.close()
       await Promise.all([...sessions.values()].map(({ loop }) => loop.stop()))
       await jobsStopped
+      await dashboardsStopped
       db.close()
     },
   }
