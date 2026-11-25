@@ -5,7 +5,7 @@ import { join } from "node:path"
 import { startServer, type Command, type Evie } from "../src/index.ts"
 import { openConnection } from "../web/src/connection.ts"
 import { openSessions, type Sessions } from "../web/src/sessions.ts"
-import { openStorage, type Storage, type StorageState } from "../web/src/storage.ts"
+import { deleteWords, openStorage, type Storage, type StorageState } from "../web/src/storage.ts"
 import { storageShown } from "../web/src/shown.ts"
 import { followLooks, keptLook, onLooks } from "../web/src/project-look.ts"
 import { makeWorkspace, pickIcon } from "../web/src/workspace-actions.ts"
@@ -247,4 +247,79 @@ test("a file the frame draws itself is not read over the line; one the route wil
   storage.show("shown/logo.svg")
   const read = await until(storage, (state) => state.file?.path === "shown/logo.svg" && (state.file.read !== undefined || state.file.framed === true))
   expect(read.file).toMatchObject({ path: "shown/logo.svg", read: { kind: "image", type: "image/svg+xml" } })
+})
+
+test("deleting from Storage takes a file or folder away at once, with the listings of the folders in it, and lists its folder again; a refusal comes back in the server's words", async () => {
+  const { connection, evieFolder, project } = await start()
+  await mkdir(join(evieFolder, "files", "menus"), { recursive: true })
+  await writeFile(join(evieFolder, "evie.json"), "{}\n")
+  await writeFile(join(evieFolder, "files", "notes.md"), "# Beds\n")
+  await writeFile(join(evieFolder, "files", "old.md"), "# Old\n")
+  await writeFile(join(evieFolder, "files", "menus", "winter.md"), "# Soups\n")
+  const storage = storageOf(connection, project)
+  await until(storage, (state) => state.folders.get("files/menus")?.entries !== undefined)
+
+  expect(await storage.count("files")).toEqual({ files: 3, folders: 1 })
+  expect(await storage.count("gone.md")).toBeUndefined()
+
+  expect(await storage.remove("files/old.md")).toBeUndefined()
+  expect(names(storage.state(), "files")).toEqual(["menus", "notes.md"])
+
+  storage.toggle("files/menus")
+  expect(await storage.remove("files")).toBeUndefined()
+  expect(names(storage.state(), "")).toEqual(["evie.json"])
+  expect([...storage.state().folders.keys()]).toEqual([""])
+  expect(storage.state().closed.size).toBe(0)
+
+  expect(await storage.remove("files")).toBe("There is no file or folder files in this project's .evie folder.")
+  const relisted = await until(storage, (state) => state.folders.get("")?.entries?.length === 1)
+  expect(names(relisted, "")).toEqual(["evie.json"])
+})
+
+test("the dialog that asks before a delete says how much goes, and warns when what goes is used elsewhere", () => {
+  const file = (path: string) => ({ name: path.split("/").at(-1)!, path, kind: "file" as const, size: 1, changed: 0 })
+  const folder = (path: string) => ({ name: path.split("/").at(-1)!, path, kind: "folder" as const, changed: 0 })
+
+  expect(deleteWords(file("notes.md"), undefined)).toEqual({ goes: " goes." })
+  expect(deleteWords(folder("youtube"), undefined)).toEqual({ goes: " goes with everything in it." })
+  expect(deleteWords(folder("youtube"), { files: 4, folders: 3 })).toEqual({ goes: " goes with everything in it: 4 files and 3 folders." })
+  expect(deleteWords(folder("youtube"), { files: 1, folders: 0 })).toEqual({ goes: " goes with everything in it: 1 file." })
+  expect(deleteWords(folder("youtube"), { files: 0, folders: 1 })).toEqual({ goes: " goes with everything in it: 1 folder." })
+  expect(deleteWords(folder("youtube"), { files: 0, folders: 0 })).toEqual({ goes: " goes. Nothing is in it." })
+
+  const shownFile = "Earlier messages show this file, and will no longer be able to."
+  const shownFiles = "Earlier messages show files from this folder, and will no longer be able to."
+  expect(deleteWords(file("shown/s1/plan.html"), undefined).warning).toBe(shownFile)
+  expect(deleteWords(file("attachments/s1/photo.png"), undefined).warning).toBe(shownFile)
+  expect(deleteWords(folder("attachments"), undefined).warning).toBe(shownFiles)
+  expect(deleteWords(folder("shown/s1"), undefined).warning).toBe(shownFiles)
+  expect(deleteWords(file("evie.json"), undefined).warning).toBe("This is the workspace's own settings file. Without it, its backup stops and it loads no plugins of its own.")
+  expect(deleteWords(file("files/evie.json"), undefined).warning).toBeUndefined()
+  expect(deleteWords(folder("shownotes"), undefined).warning).toBeUndefined()
+})
+
+test("a listing still on its way when its folder is deleted is dropped, so the folder does not come back", async () => {
+  const late = gate()
+  const { served, connection, project } = await startHolding(async (command, answer) => {
+    const answered = answer().then(
+      (result) => ({ result }),
+      (error: unknown) => ({ error }),
+    )
+    if (command.type === "list_storage" && command.folder === "files/menus") await late.opened
+    const done = await answered
+    if ("error" in done) throw done.error
+    return done.result
+  })
+  const evieFolder = join(served.run.projectFolder, ".evie")
+  await mkdir(join(evieFolder, "files", "menus", "winter"), { recursive: true })
+  await writeFile(join(evieFolder, "notes.md"), "# Beds\n")
+  const storage = storageOf(connection, project)
+  await until(storage, (state) => state.folders.get("files")?.entries !== undefined && state.folders.has("files/menus"))
+
+  expect(await storage.remove("files")).toBeUndefined()
+  late.open()
+  await until(storage, (state) => names(state, "")?.join() === "notes.md")
+  await Bun.sleep(50)
+
+  expect([...storage.state().folders.keys()]).toEqual([""])
 })
