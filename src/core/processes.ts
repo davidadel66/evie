@@ -156,3 +156,89 @@ export function stopGroup(group: number, still: () => boolean = () => true) {
   kill("SIGTERM")
   setTimeout(() => still() && kill("SIGKILL"), 2000).unref()
 }
+
+// ---- A command an earlier run of Evie left ------------------------------------------------
+
+// When a process started, as the system gives it, or undefined when there
+// is no such process. With its id, it tells the process apart from a later
+// one that has been given the same id. It is asked for in one time zone and
+// language, so that it reads the same to every run of Evie. Asking takes a
+// few milliseconds.
+export function startOf(pid: number): string | undefined {
+  try {
+    const env = { PATH: process.env.PATH ?? "", TZ: "UTC", LC_ALL: "C" }
+    const at = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], { env, stderr: "ignore" }).stdout.toString().trim()
+    return at === "" ? undefined : at
+  } catch {
+    return undefined
+  }
+}
+
+// Whether a process of this id is there. Signal 0 only asks.
+function alive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch (cause) {
+    return (cause as { code?: string }).code === "EPERM"
+  }
+}
+
+// Whether the group of this id is still the command that started at
+// `processStart`. The command's own shell leads its group: while a process
+// of that id is there, it is the command's unless it started at another
+// time than the one recorded. One whose start time cannot be read is taken
+// to be the command's. Once the shell has gone, a group left with that id
+// is still the command's, since no new group can take the id while any of
+// the old one is left. Asked afresh each time, as the id can pass on.
+export function sameCommand(pid: number, processStart: string | undefined): boolean {
+  if (!groupThere(pid)) return false
+  if (!alive(pid) || processStart === undefined) return true
+  const at = startOf(pid)
+  return at === undefined || at === processStart
+}
+
+// How often, in milliseconds, a command picked up again is looked at to
+// tell whether it has gone.
+const PICKED_UP_EVERY = 1000
+
+// A command an earlier run of Evie started, taken to be the caller's own
+// again, which is for the caller to have checked with `sameCommand`. While
+// it runs, only whether its group is there is asked, which costs next to
+// nothing. Whether the group is still the command's is asked once more
+// before it is stopped, so that a program since given its id is never
+// signalled. How it ended on its own is not known.
+export function pickUp(pid: number, processStart: string | undefined): Running {
+  let how: Ended["how"] = "exited"
+  let over = false
+  let clock: ReturnType<typeof setTimeout> | undefined
+  let finish = () => {}
+  const ended = new Promise<Ended>((resolve) => {
+    finish = () => {
+      over = true
+      clearTimeout(clock)
+      resolve({ how: how === "exited" ? "unknown" : how })
+    }
+  })
+  // Waiting for it to go on its own does not keep Evie running; waiting
+  // for it to stop does, as someone waits for that.
+  const look = () => {
+    if (!groupThere(pid)) return finish()
+    clock = setTimeout(look, how === "exited" ? PICKED_UP_EVERY : ALL_GONE_EVERY)
+    if (how === "exited") clock.unref()
+  }
+  look()
+
+  return {
+    pid,
+    ended,
+    stop(reason) {
+      if (over || how !== "exited") return
+      how = reason
+      clearTimeout(clock)
+      if (!sameCommand(pid, processStart)) return finish()
+      stopGroup(pid, () => !over)
+      look()
+    },
+  }
+}

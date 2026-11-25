@@ -2,7 +2,7 @@ import { readFileSync, renameSync } from "node:fs"
 import { homedir } from "node:os"
 import { dirname, join } from "node:path"
 import { EndNotKnown } from "../core/jobs.ts"
-import { endedBy, endOf, exitFileOf, groupThere, startCommand, stopGroup, type Ended, type Printed } from "../core/processes.ts"
+import { endedBy, endOf, exitFileOf, sameCommand, startCommand, startOf, stopGroup, type Ended, type Printed } from "../core/processes.ts"
 import { safeName } from "../core/tools.ts"
 import type { JobRecord, JobWork, Plugin, Tool } from "../core/types.ts"
 import { resolvePath, statOrMissing } from "./files/paths.ts"
@@ -212,21 +212,6 @@ function describe(ended: Ended, printed: Printed, timeout: number | undefined, m
   return [output, notes.join("\n")].filter((part) => part !== "").join("\n\n")
 }
 
-// When a process started, as the system gives it, or undefined when there
-// is no such process. With its id, it tells the process apart from a later
-// one that has been given the same id. It is asked for in one time zone and
-// language, so that it reads the same to every run of Evie. Asking takes a
-// few milliseconds.
-function startOf(pid: number): string | undefined {
-  try {
-    const env = { PATH: process.env.PATH ?? "", TZ: "UTC", LC_ALL: "C" }
-    const at = Bun.spawnSync(["ps", "-o", "lstart=", "-p", String(pid)], { env, stderr: "ignore" }).stdout.toString().trim()
-    return at === "" ? undefined : at
-  } catch {
-    return undefined
-  }
-}
-
 // ---- Picking a command up again -----------------------------------------------------------
 
 // How often a command picked up again is looked at, to tell when it has ended.
@@ -239,20 +224,7 @@ function resumeCommand(job: JobRecord): JobWork {
   const { pid, processStart, deadline } = job.keep as { pid?: unknown; processStart?: unknown; deadline?: unknown }
   const exitFile = exitFileOf(job.outputFile)
   const timeout = typeof deadline === "number" ? Math.round((deadline - job.started) / 1000) : undefined
-  // Whether the group of the recorded id is someone else's now. The
-  // command's own shell leads its group: while a process of that id is
-  // there, it is the command's unless it started at another time than the
-  // one recorded. One whose start time cannot be read is taken to be the
-  // command's. Once the shell has gone, a group left with that id is still
-  // the command's, since no new group can take the id while any of the
-  // old one is left. Asked afresh each time, as the id can pass on.
-  const someoneElses = () => {
-    if (typeof pid !== "number") return true
-    if (!alive(pid)) return false
-    const at = startOf(pid)
-    return typeof processStart === "string" && at !== undefined && at !== processStart
-  }
-  const running = () => typeof pid === "number" && groupThere(pid) && !someoneElses()
+  const running = () => typeof pid === "number" && sameCommand(pid, typeof processStart === "string" ? processStart : undefined)
   let how: "exited" | "stopped" | "timeout" = "exited"
   let over = false
   const stop = (reason: "stopped" | "timeout") => {
@@ -288,15 +260,5 @@ function exitStatus(file: string): Pick<Ended, "status" | "signal"> | undefined 
     return signal !== undefined ? { signal } : { status }
   } catch {
     return undefined
-  }
-}
-
-// Whether a process of this id is there. Signal 0 only asks.
-function alive(pid: number): boolean {
-  try {
-    process.kill(pid, 0)
-    return true
-  } catch (cause) {
-    return (cause as { code?: string }).code === "EPERM"
   }
 }

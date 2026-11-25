@@ -1,5 +1,6 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises"
+import { spawn } from "node:child_process"
+import { mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createDashboardRunner, type DashboardRunnerOptions, type LiveApp } from "../src/core/dashboard-runner.ts"
@@ -212,4 +213,55 @@ test("Evie stopping while an app is first looked at does not run its start comma
   expect(await opening).toEqual({ ok: false, status: "failed", message: expect.stringContaining("stopping") })
   // Starting it would have made its log file.
   expect(await readdir(logFolder).catch(() => [])).toEqual([])
+})
+
+// Evie killed rather than stopped: its runner is left as it is, never
+// closed, and another is made over the same folder, as the next start does.
+test("an app left running by an Evie that was killed is picked up by the next one, and stopped with it", async () => {
+  const { runner: killed, app, logFolder } = await setUp()
+  const left = app("left", (port) => appCommand(port))
+  expect(await killed.ensure(left, running)).toEqual({ ok: true, started: true })
+
+  const next = createDashboardRunner({ logFolder })
+  cleanups.push(() => next.close())
+  // It is the same app, not one started again.
+  expect(await next.ensure(left, running)).toEqual({ ok: true, started: false })
+  await next.close()
+  expect(await untilDown(left.url)).toBe(true)
+  expect((await readdir(logFolder)).filter((name) => name.endsWith(".running"))).toEqual([])
+})
+
+test("an app picked up after Evie was killed is stopped once no tab asks for it, and counts toward the most that run", async () => {
+  const { runner: killed, app, logFolder } = await setUp()
+  const first = app("first", (port) => appCommand(port))
+  const second = app("second", (port) => appCommand(port))
+  expect(await killed.ensure(first, running)).toMatchObject({ ok: true })
+  expect(await killed.ensure(second, running)).toMatchObject({ ok: true })
+
+  // The owner lowered the most that run before starting Evie again.
+  const next = createDashboardRunner({ logFolder, mostRunning: 1, idleMinutes: 0.01 })
+  cleanups.push(() => next.close())
+  expect(await untilDown(first.url)).toBe(true)
+  expect(await answers(second.url)).toBe(true)
+  // No tab asks for the other one.
+  expect(await untilDown(second.url)).toBe(true)
+})
+
+test("a record whose process number has passed to another program is dropped, and that program is left alone", async () => {
+  const { runner: killed, app, logFolder } = await setUp()
+  const left = app("left", (port) => appCommand(port))
+  expect(await killed.ensure(left, running)).toMatchObject({ ok: true })
+  const [record] = (await readdir(logFolder)).filter((name) => name.endsWith(".running"))
+  const kept = JSON.parse(await readFile(join(logFolder, record!), "utf8"))
+  // The app goes, and its number is given to a program that leads a group of its own.
+  await killed.close()
+  const other = spawn("sleep", ["30"], { detached: true, stdio: "ignore" })
+  cleanups.push(async () => void other.kill("SIGKILL"))
+  await writeFile(join(logFolder, `${other.pid}.running`), JSON.stringify({ ...kept, pid: other.pid, processStart: "Mon Jan  1 00:00:00 2001" }))
+
+  const next = createDashboardRunner({ logFolder, idleMinutes: 0.005 })
+  await Bun.sleep(400)
+  await next.close()
+  expect(() => process.kill(other.pid!, 0)).not.toThrow()
+  expect((await readdir(logFolder)).filter((name) => name.endsWith(".running"))).toEqual([])
 })

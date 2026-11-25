@@ -1,7 +1,7 @@
-import { mkdirSync, writeFileSync } from "node:fs"
+import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { connect } from "node:net"
 import { join, resolve } from "node:path"
-import { endOf, startCommand, type Ended, type Running } from "./processes.ts"
+import { endOf, pickUp, sameCommand, startCommand, startOf, type Ended, type Running } from "./processes.ts"
 
 // Runs the apps behind a workspace's live dashboards. An app is started from
 // its dashboard's `start` command, in its project's folder, when its tab
@@ -11,10 +11,14 @@ import { endOf, startCommand, type Ended, type Running } from "./processes.ts"
 // and never stopped. An app Evie started is
 // stopped once no tab has asked for it in `idleMinutes`, and at most
 // `mostRunning` run at once: starting another stops the one asked for
-// longest ago. All are stopped when Evie stops.
+// longest ago. All are stopped when Evie stops. Each one running has a
+// small record beside its output, so that when Evie was killed instead, the
+// next run picks its apps up again as its own, and none is left running
+// with no one to stop it.
 
 export type DashboardRunnerOptions = {
-  // Where each started app's output goes, a file for each dashboard.
+  // Where each started app's output goes, a file for each dashboard, and
+  // the record of each one running.
   logFolder: string
   idleMinutes?: number
   mostRunning?: number
@@ -74,6 +78,32 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
     app.idle.unref()
   }
 
+  // Takes a running command as the app of `key`: it counts as just asked
+  // for, and is forgotten, with its record, once it has ended.
+  function keep(key: string, running: Running, record: string): Started {
+    const mine: Started = { running }
+    asked(key, mine)
+    void running.ended.then((ended) => {
+      mine.ended = ended
+      if (started.get(key) === mine) started.delete(key)
+      clearTimeout(mine.idle)
+      rmSync(record, { force: true })
+    })
+    return mine
+  }
+
+  // The apps an Evie that was killed left running, the one started longest
+  // ago first. A record of one that has gone, or whose process number is
+  // another program's now, is dropped.
+  for (const { file, key, pid, processStart } of recordsIn(options.logFolder)) {
+    if (sameCommand(pid, processStart)) keep(key, pickUp(pid, processStart), file)
+    else rmSync(file, { force: true })
+  }
+  while (started.size > most) {
+    const [oldestKey, oldest] = started.entries().next().value!
+    void stop(oldestKey, oldest)
+  }
+
   function stop(key: string, app: Started): Promise<unknown> {
     if (started.get(key) === app) started.delete(key)
     clearTimeout(app.idle)
@@ -130,13 +160,13 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
       const ended = await running.ended
       return { ok: false, status: "failed", message: `Its start command could not be run: ${ended.problem}` }
     }
-    const mine: Started = { running }
-    asked(key, mine)
-    void running.ended.then((ended) => {
-      mine.ended = ended
-      if (started.get(key) === mine) started.delete(key)
-      clearTimeout(mine.idle)
-    })
+    const record = join(options.logFolder, `${running.pid}${RECORD}`)
+    try {
+      writeFileSync(record, JSON.stringify({ key, pid: running.pid, processStart: startOf(running.pid) }))
+    } catch {
+      // Without its record the app only could not be picked up again.
+    }
+    const mine = keep(key, running, record)
 
     const printed = () => {
       const { text } = endOf(logFile, LOG_SHOWN)
@@ -159,6 +189,33 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
       await Promise.all([...started].map(([key, app]) => stop(key, app)))
     },
   }
+}
+
+// The record of an app running: a file named by its process number,
+// holding which app it is and when its process started, which with the
+// number tells it apart from a later program given the same number.
+const RECORD = ".running"
+type AppRecord = { file: string; key: string; pid: number; processStart: string | undefined }
+
+function recordsIn(folder: string): AppRecord[] {
+  let names: string[]
+  try {
+    names = readdirSync(folder).filter((name) => name.endsWith(RECORD))
+  } catch {
+    return []
+  }
+  const records: (AppRecord & { written: number })[] = []
+  for (const name of names) {
+    const file = join(folder, name)
+    try {
+      const { key, pid, processStart } = JSON.parse(readFileSync(file, "utf8")) as Record<string, unknown>
+      if (typeof key !== "string" || typeof pid !== "number" || !Number.isInteger(pid) || pid <= 1) throw new Error("not a record")
+      records.push({ file, key, pid, processStart: typeof processStart === "string" ? processStart : undefined, written: statSync(file).mtimeMs })
+    } catch {
+      rmSync(file, { force: true })
+    }
+  }
+  return records.sort((one, other) => one.written - other.written)
 }
 
 const STOPPING: EnsureResult = { ok: false, status: "failed", message: "Evie is stopping, so it starts no dashboards." }
