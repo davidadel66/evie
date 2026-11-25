@@ -762,6 +762,37 @@ export type StorageFile = { path: string; size: number; changed: number } & (
   | { kind: "image"; type: string; data: string }
 )
 
+// ---- Dashboards -----------------------------------------------------------------
+
+// One of a workspace's dashboards, as its project's `.evie/evie.json` lists
+// it: a static HTML file inside `.evie/`, a live app on this computer with
+// the command that starts it, or an entry that cannot be used, with why.
+export type DashboardEntry =
+  | { id: string; name: string; kind: "static"; path: string }
+  | { id: string; name: string; kind: "live"; url: string; start?: string }
+  | { id: string; name: string; kind: "invalid"; error: string }
+
+// What opening a live dashboard gives: where its page is, and whether its
+// app had to be started for it, or why it could not be opened, with the end
+// of what its app printed.
+export type DashboardOpened =
+  | { status: "ready"; url: string; started: boolean }
+  | { status: "not_running" | "stopped" | "failed"; message: string; log?: string }
+
+// A workspace's live dashboards, which the server opens for the page and
+// reaches through its proxy.
+export type LiveDashboards = {
+  // Makes sure a live dashboard's app answers. Its `url` is the app's own
+  // address, on this computer. To "open" it, as its tab does once, starts
+  // its app if need be. To "keep" it, as its open tab does again and again,
+  // keeps the app from being stopped as idle, and starts nothing: an app
+  // that has stopped is said to be "stopped".
+  open(project: string, id: string, how: "open" | "keep"): Promise<DashboardOpened>
+  // A live dashboard's address, while its project is trusted and lists it;
+  // otherwise undefined. Asked each time the proxy is used.
+  address(project: string, id: string): Promise<string | undefined>
+}
+
 // ---- Settings -------------------------------------------------------------------
 
 // The settings the owner changes from a client's settings window, as they
@@ -1183,6 +1214,12 @@ export type Commands = {
     input: { project: string }
     output: void
   }
+  // A workspace's dashboards, in the order its `.evie/evie.json` lists
+  // them. None for a project whose settings are not trusted.
+  list_dashboards: {
+    input: { project: string }
+    output: { dashboards: DashboardEntry[] }
+  }
 }
 
 export type Command = { [Type in keyof Commands]: { type: Type } & Commands[Type]["input"] }[keyof Commands]
@@ -1203,6 +1240,8 @@ export type Core = Omit<Evie, "close"> & {
   attachments: Attachments
   // Storage's files, which the server gives to the page over HTTP.
   storage: StorageFiles
+  // The live dashboards, which the server opens and reaches for the page.
+  dashboards: LiveDashboards
   // Picks up the work an earlier run of Evie left in the data folder: jobs
   // still running, or that ended with no one there to tell, and turns cut
   // off. Then starts the plugins' own work over time. Called once, by the

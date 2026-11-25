@@ -1,0 +1,94 @@
+import type { DashboardEntry, DashboardOpened, Evie } from "../../src/core/types.ts"
+import type { Connection } from "./connection.ts"
+
+// A workspace's dashboards, apart from its screen: listed from its
+// project's settings once connected, and again each time the line comes
+// back, since nothing tells the page of an edit to them. And what a live
+// dashboard's tab shows, as it opens the dashboard and asks for it again
+// while it is open.
+
+export type DashboardsState = { listed: boolean; dashboards: DashboardEntry[]; problem?: string }
+
+export type Dashboards = {
+  state(): DashboardsState
+  subscribe(listener: () => void): () => void
+  close(): void
+}
+
+export function openDashboards(connection: Connection, project: string): Dashboards {
+  let state: DashboardsState = { listed: false, dashboards: [] }
+  const listeners = new Set<() => void>()
+  let closed = false
+  let asked = 0
+  let listedOver: Evie | undefined
+
+  function set(next: DashboardsState) {
+    state = next
+    for (const listener of [...listeners]) listener()
+  }
+
+  function follow() {
+    const now = connection.state()
+    const evie = now.status === "connected" ? now.evie : undefined
+    if (evie === listedOver) return
+    listedOver = evie
+    if (evie === undefined) return
+    const ask = ++asked
+    evie.send({ type: "list_dashboards", project }).then(
+      ({ dashboards }) => !closed && ask === asked && set({ listed: true, dashboards }),
+      (cause: unknown) => !closed && ask === asked && set({ listed: true, dashboards: state.dashboards, problem: cause instanceof Error ? cause.message : String(cause) }),
+    )
+  }
+  const unfollow = connection.subscribe(follow)
+  follow()
+
+  return {
+    state: () => state,
+    subscribe(listener) {
+      listeners.add(listener)
+      return () => void listeners.delete(listener)
+    },
+    close() {
+      closed = true
+      unfollow()
+    },
+  }
+}
+
+// What opening a live dashboard gives the page: what the server answered,
+// or that the server could not be reached.
+export type LiveOpened = DashboardOpened | { status: "unreachable"; message: string }
+
+// Opens a live dashboard through the server, with this browser's sign-in
+// cookie: its app is started if need be, and the page is given the address
+// its frame reaches it at. Asked to "keep" it, as while the tab is open, it
+// keeps the app running and the address working, and starts nothing: an
+// app that has stopped stays so until the dashboard is opened again.
+export async function openLive(project: string, id: string, how: "open" | "keep" = "open"): Promise<LiveOpened> {
+  try {
+    const answer = await fetch(`/dashboard?${new URLSearchParams({ project, id, ...(how === "keep" && { keep: "1" }) })}`, { method: "POST" })
+    if (!answer.ok) return { status: "failed", message: (await answer.text()) || `evie's server answered ${answer.status}.` }
+    return (await answer.json()) as DashboardOpened
+  } catch (cause) {
+    return { status: "unreachable", message: `evie's server could not be reached: ${cause instanceof Error ? cause.message : String(cause)}` }
+  }
+}
+
+// What a live dashboard's tab shows: nothing yet while it opens, its page,
+// or why it could not be opened. `load` counts the times the page has been
+// loaded from the start, so that the frame loads it again when it changes.
+export type LiveShown = { status: "opening" } | { status: "ready"; url: string; load: number } | Exclude<DashboardOpened, { status: "ready" }>
+
+// What the tab shows once the dashboard has been opened, or asked for again.
+// The page stays as it is while its app keeps running, and while evie's
+// server cannot be reached for a moment, since the page may still work. It
+// is loaded again when its app had to be started again, since the page
+// drawn is of the app that stopped. Once its app has stopped, as to make
+// room for another, the tab says so until it is asked to start it again.
+export function afterOpening(shown: LiveShown, opened: LiveOpened): LiveShown {
+  if (opened.status === "unreachable") return shown.status === "ready" ? shown : { status: "failed", message: opened.message }
+  if (opened.status !== "ready") return opened
+  if (shown.status !== "ready") return { status: "ready", url: opened.url, load: 0 }
+  if (!opened.started && opened.url === shown.url) return shown
+  return { status: "ready", url: opened.url, load: shown.load + 1 }
+}

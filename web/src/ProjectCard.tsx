@@ -292,7 +292,7 @@ function ProjectRows({ connection, projectId, project, density }: { connection: 
   return (
     <>
       {showProject && (
-        <a href={addressOfWorkspace({ workspace: projectId, tab: "sessions" })} title={`Open the ${name} workspace`} className={ROW}>
+        <a href={addressOfWorkspace({ workspace: projectId })} title={`Open the ${name} workspace`} className={ROW}>
           <ProjectTile project={projectId} size="detail" />
           <span className="min-w-0 truncate">{name}</span>
         </a>

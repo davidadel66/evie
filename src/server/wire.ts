@@ -47,6 +47,7 @@ export const PATHS = {
   attachments: "/attachments",
   storage: "/storage",
   preview: "/preview",
+  dashboard: "/dashboard",
 } as const
 
 // The close code for a connection whose token was taken back. Codes from
