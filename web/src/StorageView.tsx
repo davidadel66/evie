@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, StorageEntry } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
 import { Button } from "./components/ui/button.tsx"
@@ -176,13 +176,16 @@ function FileShown({ state, path, back, now, project }: { state: StorageState; p
 // Asks whether to delete a file, or a folder with everything in it, for
 // good, naming it by its path and saying how much goes, as the server
 // counts it, with a warning when earlier messages use what goes. It stays
-// open while it is deleted, and says why when the server refuses.
+// open while it is deleted, and says why when the server refuses; a delete
+// that ends once the dialog asks about something else leaves it be.
 function DeleteDialog({ entry, storage, close }: { entry: StorageEntry | undefined; storage: Storage; close(): void }) {
   const [counted, setCounted] = useState<{ path: string; counted: Counted | undefined }>()
   const [deleting, setDeleting] = useState(false)
   const [problem, setProblem] = useState<string>()
   const path = entry?.path
   const folder = entry?.kind === "folder"
+  const asking = useRef(path)
+  asking.current = path
   useEffect(() => {
     setDeleting(false)
     setProblem(undefined)
@@ -198,6 +201,7 @@ function DeleteDialog({ entry, storage, close }: { entry: StorageEntry | undefin
     if (entry === undefined) return
     setDeleting(true)
     const refused = await storage.remove(entry.path)
+    if (asking.current !== entry.path) return
     setDeleting(false)
     if (refused === undefined) close()
     else setProblem(refused)

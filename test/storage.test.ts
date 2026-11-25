@@ -1,4 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
+import { existsSync } from "node:fs"
 import { mkdir, mkdtemp, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -301,4 +302,27 @@ test("the .evie folder's own git repository is not listed or read through a link
   await expect(run.evie.send({ type: "read_storage", project, path: "history/config" })).rejects.toThrow(
     "history/config is the .evie folder's own git repository, which backs it up, and not one of its files.",
   )
+})
+
+test("the .evie folder's own git repository is not deleted by its name in other letters, as on a Mac, whose disk ignores case", async () => {
+  const run = await start()
+  await mkdir(join(run.evieFolder, ".git"), { recursive: true })
+  await writeFile(join(run.evieFolder, ".git", "config"), "[remote]\n")
+  const project = run.project!.id
+  const ignoresCase = existsSync(join(run.evieFolder, ".GIT"))
+
+  for (const path of [".GIT", ".Git", ".GIT/config"]) {
+    const refused = ignoresCase ? `${path} is the .evie folder's own git repository, which backs it up, and not one of its files.` : `There is no file or folder ${path} in this project's .evie folder.`
+    await expect(run.evie.send({ type: "count_storage", project, path })).rejects.toThrow(refused)
+    await expect(run.evie.send({ type: "delete_storage", project, path })).rejects.toThrow(refused)
+  }
+  expect(await Bun.file(join(run.evieFolder, ".git", "config")).text()).toBe("[remote]\n")
+})
+
+test("a .git at the top of the .evie folder is never listed, even as a link to a folder inside it", async () => {
+  const run = await start()
+  await mkdir(join(run.evieFolder, "kept"), { recursive: true })
+  await symlink(join(run.evieFolder, "kept"), join(run.evieFolder, ".git"))
+
+  expect((await run.evie.send({ type: "list_storage", project: run.project!.id })).entries.map((entry) => entry.path)).toEqual(["kept"])
 })

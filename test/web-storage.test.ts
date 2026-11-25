@@ -297,3 +297,29 @@ test("the dialog that asks before a delete says how much goes, and warns when wh
   expect(deleteWords(file("files/evie.json"), undefined).warning).toBeUndefined()
   expect(deleteWords(folder("shownotes"), undefined).warning).toBeUndefined()
 })
+
+test("a listing still on its way when its folder is deleted is dropped, so the folder does not come back", async () => {
+  const late = gate()
+  const { served, connection, project } = await startHolding(async (command, answer) => {
+    const answered = answer().then(
+      (result) => ({ result }),
+      (error: unknown) => ({ error }),
+    )
+    if (command.type === "list_storage" && command.folder === "files/menus") await late.opened
+    const done = await answered
+    if ("error" in done) throw done.error
+    return done.result
+  })
+  const evieFolder = join(served.run.projectFolder, ".evie")
+  await mkdir(join(evieFolder, "files", "menus", "winter"), { recursive: true })
+  await writeFile(join(evieFolder, "notes.md"), "# Beds\n")
+  const storage = storageOf(connection, project)
+  await until(storage, (state) => state.folders.get("files")?.entries !== undefined && state.folders.has("files/menus"))
+
+  expect(await storage.remove("files")).toBeUndefined()
+  late.open()
+  await until(storage, (state) => names(state, "")?.join() === "notes.md")
+  await Bun.sleep(50)
+
+  expect([...storage.state().folders.keys()]).toEqual([""])
+})

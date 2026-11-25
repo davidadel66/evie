@@ -62,18 +62,21 @@ export function openStorage(connection: Connection, project: string): Storage {
   }
 
   // A folder is listed again over what it showed before, which stays until
-  // the new list comes. Then each folder in it not listed yet is listed.
+  // the new list comes. Then each folder in it not listed yet is listed. A
+  // list that comes once its folder has been deleted is dropped, so that
+  // the folder does not come back.
   function list(folder: string) {
     const evie = clientOf()
     if (evie === undefined) return
     if (!state.folders.has(folder)) setFolder(folder, {})
+    const wanted = () => !closed && state.folders.has(folder)
     evie.send({ type: "list_storage", project, ...(folder !== "" && { folder }) }).then(
       (listed) => {
-        if (closed) return
+        if (!wanted()) return
         setFolder(folder, listed)
         for (const entry of listed.entries) if (entry.kind === "folder" && !state.folders.has(entry.path)) list(entry.path)
       },
-      (cause: unknown) => !closed && setFolder(folder, { problem: wordsOf(cause) }),
+      (cause: unknown) => wanted() && setFolder(folder, { problem: wordsOf(cause) }),
     )
   }
 

@@ -48,6 +48,7 @@ export async function listStorage(project: string, folder: string | undefined, d
   if (!kind?.isDirectory()) throw new Error(`There is no folder ${folder} in this project's .evie folder.`)
   const listed: StorageEntry[] = []
   for (const name of await readdir(at)) {
+    if (named === "" && name === OWN_GIT) continue
     const target = await realOrNothing(join(at, name))
     if (target === undefined || !within(target, evie!) || inOwnGit(target, evie!)) continue
     const facts = await stat(target).catch(() => undefined)
@@ -112,7 +113,10 @@ export async function deleteStorage(project: string, path: string, dataFolder: s
 // the folder that holds it, as that folder really is, once that is sure to
 // be inside the `.evie/` folder. Its own name is not followed, so that a
 // link is the link. The `.evie/` folder itself is refused, and so is its
-// own git repository, however the path reaches it.
+// own git repository, however the path reaches it: through a link, or by
+// its name in other letters, such as `.GIT`, which on a disk that ignores
+// case, as a Mac's does, is the same folder. That is told by the folder
+// itself, not by its name.
 async function deletable(project: string, path: string, dataFolder: string): Promise<string> {
   const evie = ownEvie(project, dataFolder)
   const named = inside(path, "file")
@@ -122,7 +126,10 @@ async function deletable(project: string, path: string, dataFolder: string): Pro
   if (holder === undefined) throw new Error(`There is no file or folder ${path} in this project's .evie folder.`)
   const at = join(holder, named.slice(cut + 1))
   if (inOwnGit(at, evie!)) throw new Error(ownGitRefused(path))
-  if ((await lstat(at).catch(() => undefined)) === undefined) throw new Error(`There is no file or folder ${path} in this project's .evie folder.`)
+  const facts = await lstat(at).catch(() => undefined)
+  if (facts === undefined) throw new Error(`There is no file or folder ${path} in this project's .evie folder.`)
+  const git = await lstat(join(evie!, OWN_GIT)).catch(() => undefined)
+  if (git !== undefined && facts.dev === git.dev && facts.ino === git.ino) throw new Error(ownGitRefused(path))
   return at
 }
 
