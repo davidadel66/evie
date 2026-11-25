@@ -808,19 +808,36 @@ session list or the session details. The page then has three other columns:
   that suit a project. A colour applies at once; an icon applies and closes
   the picker. Both are kept in evie's database, and every tile on the page
   shows them.
-- **Dashboards** are tabs configured in a trusted project's `.evie/evie.json`
-  under `"dashboards"`. Each entry is either a static HTML file inside
-  `.evie/` (`{ "name": "Summary", "path": "dashboards/summary.html" }`,
-  served through a scoped `/preview` pass) or a live local web app on a
-  loopback address (`{ "name": "Metrics", "url": "http://127.0.0.1:4100",
-  "start": "bun run dev", "idle": 15 }`). Live apps with a `"start"` command
-  are started on demand when their tab opens, kept running while viewed via
-  a heartbeat, stopped cleanly after their idle timeout (or when the server
-  stops), and capped so runaway apps do not pile up. Evie's server proxies
-  live dashboards at `/dashboard/<pass>/…`, stripping evie's own sign-in
-  credentials, and draws every dashboard in a sandboxed iframe without
-  `allow-same-origin`. When a workspace has dashboards, opening it lands on
-  its first dashboard; otherwise it opens on Sessions.
+- **Dashboards** are listed under `"dashboards"` in the project's own
+  `.evie/evie.json`, in the order of their tabs, and only for a project
+  whose settings are trusted. Each is an HTML file inside `.evie/`, by its
+  `path`, or a web app on this computer, by its `url`, with the command
+  that starts it:
+
+  ```json
+  { "dashboards": [
+      { "name": "Summary", "path": "dashboards/summary.html" },
+      { "name": "Cash flow", "url": "http://127.0.0.1:3456/", "start": "bun run serve" } ] }
+  ```
+
+  A live dashboard's app is started, in the project's folder, when its tab
+  opens; one already answering at its address is used as it is and never
+  stopped. The open tab asks for it again every 30 seconds, which keeps it
+  running, and starts it again if it has stopped. An app no tab has asked
+  for in 10 minutes is stopped, and at most 3 run at once: starting another
+  stops the one asked for longest ago. Both can be changed in the global
+  file, as `{ "liveDashboards": { "idleMinutes": 10, "mostRunning": 3 } }`.
+  Evie stops the apps it started when it stops; killed instead, it leaves
+  them running. The page reaches an app through evie's server, at an
+  address of its own for each browser, `/dashboard/<pass>/…`, which stops
+  working once that browser's sign-in is taken back, or an hour after the
+  tab last asked for it. The app is never sent the sign-in. Every dashboard runs in a sandbox with no
+  origin of its own, so it cannot read evie's page, and keeps no
+  `localStorage` or cookies: what it keeps is kept by its app. An app
+  reaches its own files and API by relative paths, such as `styles.css` or
+  `api/calendar`, since a path from the root, such as `/styles.css`, is
+  evie's. A dashboard cannot use WebSockets yet. An entry that cannot be
+  used still has its tab, which says what to fix.
 - **Sessions** lists the project's sessions, each with Needs you, Working,
   Done or how long ago it was active. Picking one opens it in the session
   view.
@@ -870,7 +887,7 @@ workspace and the side chat no longer fit side by side, under 880px beside
 the strip, as on a phone or an upright tablet, the strip stays a column on
 the left and the side chat stacks below the workspace, a screen high. The
 header stays one row: the name is cut down to 96px at the least, and then
-the tabs scroll sideways.
+the dashboards' tabs scroll sideways.
 
 ### Attachments
 

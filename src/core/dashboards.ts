@@ -1,196 +1,71 @@
-import { readFile, stat } from "node:fs/promises"
-import { join } from "node:path"
-import { onThisComputer } from "../server/wire.ts"
+import { stat } from "node:fs/promises"
 import { ownEvie, storageFileAt } from "./storage.ts"
 import type { DashboardEntry } from "./types.ts"
 
-// A project's configured dashboards, read from `<project>/.evie/evie.json`.
-// Each entry is either a static file inside `.evie/`, a live local web app
-// reached on a loopback address, or an invalid entry kept in place with the
-// reason it was refused so the owner can see what to fix. Untrusted projects
-// expose no dashboards.
+// A workspace's dashboards, from the `dashboards` list in its project's
+// `.evie/evie.json`, in order. Each is a live app, reached at a `url` on
+// this computer, or a static HTML file, by its `path` inside `.evie/`. An
+// entry that cannot be used is kept in its place, with why, so that its tab
+// says what to fix.
 
-export type { DashboardEntry }
+// The hosts of an address on this computer, the only ones a live dashboard may have.
+const ON_THIS_COMPUTER = ["127.0.0.1", "localhost", "[::1]"]
+const ID = /^[a-z0-9][a-z0-9-]*$/
 
-const VALID_ID = /^[a-z0-9][a-z0-9-]*$/
-
-// Reads and validates the `dashboards` list from `<projectFolder>/.evie/evie.json`.
-// Never throws on bad config: missing or unreadable config yields `[]`, and
-// individual malformed entries become `{ kind: "invalid", error }`.
-export async function readDashboards(projectFolder: string, dataFolder: string, trusted: boolean): Promise<DashboardEntry[]> {
-  if (!trusted) return []
-  const config = await readProjectConfig(projectFolder)
-  if (config === undefined || config.dashboards === undefined) return []
-  if (!Array.isArray(config.dashboards)) {
-    return [{ id: "dashboards", name: "Dashboards", kind: "invalid", error: 'In .evie/evie.json, "dashboards" must be a list.' }]
-  }
-
-  const usedIds = new Set<string>()
+// The entries of a project's `dashboards` setting, as its settings file gives
+// it: undefined when the file sets none or the project is not trusted.
+export async function readDashboards(setting: unknown, projectFolder: string, dataFolder: string): Promise<DashboardEntry[]> {
+  if (setting === undefined) return []
+  if (!Array.isArray(setting)) return [{ id: "dashboards", name: "Dashboards", kind: "invalid", error: 'In .evie/evie.json, "dashboards" must be a list.' }]
+  const ids = new Set<string>()
   const entries: DashboardEntry[] = []
-  for (const raw of config.dashboards) {
-    entries.push(await parseEntry(raw, projectFolder, dataFolder, usedIds))
-  }
+  for (const entry of setting) entries.push(await read(entry, ids, projectFolder, dataFolder))
   return entries
 }
 
-// Reads `<projectFolder>/.evie/evie.json` as a plain object, or nothing when
-// it is absent, unreadable, invalid JSON, or not a plain object.
-async function readProjectConfig(projectFolder: string): Promise<Record<string, unknown> | undefined> {
-  let raw: string
-  try {
-    raw = await readFile(join(projectFolder, ".evie", "evie.json"), "utf8")
-  } catch {
-    return undefined
-  }
-  try {
-    const parsed: unknown = JSON.parse(raw)
-    return isPlainObject(parsed) ? parsed : undefined
-  } catch {
-    return undefined
-  }
-}
+async function read(entry: unknown, ids: Set<string>, projectFolder: string, dataFolder: string): Promise<DashboardEntry> {
+  const given = typeof entry === "object" && entry !== null && !Array.isArray(entry) ? (entry as Record<string, unknown>) : undefined
+  const named = typeof given?.name === "string" && given.name.trim() !== "" ? given.name.trim() : undefined
+  const name = named ?? "Dashboard"
+  const id = unique(typeof given?.id === "string" && ID.test(given.id) ? given.id : slug(name), ids)
+  const invalid = (error: string): DashboardEntry => ({ id, name, kind: "invalid", error })
+  if (given === undefined) return invalid('Each entry under "dashboards" must be an object, such as { "name": "Overview", "path": "dashboards/overview.html" }.')
+  if (named === undefined) return invalid('Each dashboard needs a "name", for its tab.')
+  if ((given.url === undefined) === (given.path === undefined)) return invalid('A dashboard has either a "url", for a live app, or a "path", for an HTML file in .evie, and not both.')
 
-async function parseEntry(
-  raw: unknown,
-  projectFolder: string,
-  dataFolder: string,
-  usedIds: Set<string>,
-): Promise<DashboardEntry> {
-  if (!isPlainObject(raw)) {
-    const name = "Dashboard"
-    const id = nextId(undefined, name, usedIds)
-    return { id, name, kind: "invalid", error: "Each dashboard entry must be an object." }
-  }
-
-  const rawName = typeof raw.name === "string" ? raw.name.trim() : ""
-  const name = rawName !== "" ? rawName : "Dashboard"
-  const id = nextId(raw.id, name, usedIds)
-
-  if (rawName === "") {
-    return { id, name, kind: "invalid", error: 'Each dashboard must have a non-empty "name".' }
-  }
-
-  const hasUrl = raw.url !== undefined
-  const hasPath = raw.path !== undefined
-  if (hasUrl && hasPath) {
-    return { id, name, kind: "invalid", error: 'A dashboard must specify either "url" or "path", not both.' }
-  }
-  if (!hasUrl && !hasPath) {
-    return { id, name, kind: "invalid", error: 'A dashboard must specify either "url" or "path".' }
-  }
-
-  if (hasUrl) {
-    return parseLiveEntry(id, name, raw)
-  }
-  return parseStaticEntry(id, name, raw.path, projectFolder, dataFolder)
-}
-
-function parseLiveEntry(id: string, name: string, raw: Record<string, unknown>): DashboardEntry {
-  if (typeof raw.url !== "string" || raw.url.trim() === "") {
-    return { id, name, kind: "invalid", error: 'A live dashboard "url" must be a non-empty loopback http(s) URL.' }
-  }
-  const url = raw.url.trim()
-  let parsed: URL
-  try {
-    parsed = new URL(url)
-  } catch {
-    return { id, name, kind: "invalid", error: `Live dashboard URL "${url}" is not a valid loopback http(s) URL.` }
-  }
-  if ((parsed.protocol !== "http:" && parsed.protocol !== "https:") || !onThisComputer(url)) {
-    return {
-      id,
-      name,
-      kind: "invalid",
-      error: `Live dashboard URL "${url}" is not allowed: live dashboards must use a loopback http(s) URL (127.0.0.1, localhost, or [::1]).`,
+  if (given.url !== undefined) {
+    const url = typeof given.url === "string" ? given.url.trim() : ""
+    const parsed = URL.canParse(url) ? new URL(url) : undefined
+    if (parsed === undefined || !["http:", "https:"].includes(parsed.protocol) || !ON_THIS_COMPUTER.includes(parsed.hostname)) {
+      return invalid(`"${url}" is not an address on this computer. A live dashboard's "url" starts with http://127.0.0.1, http://localhost or http://[::1].`)
     }
+    if (given.start !== undefined && (typeof given.start !== "string" || given.start.trim() === "")) return invalid('A dashboard\'s "start" is the command that starts its app, such as "bun run dev".')
+    return { id, name, kind: "live", url, ...(typeof given.start === "string" && { start: given.start.trim() }) }
   }
 
-  let start: string | undefined
-  if (raw.start !== undefined) {
-    if (typeof raw.start !== "string" || raw.start.trim() === "") {
-      return { id, name, kind: "invalid", error: 'When set, a live dashboard "start" command must be a non-empty string.' }
-    }
-    start = raw.start.trim()
-  }
-
-  let idle: number | "never" | undefined
-  if (raw.idle !== undefined) {
-    if (raw.idle === "never") {
-      idle = "never"
-    } else if (typeof raw.idle === "number" && Number.isFinite(raw.idle) && raw.idle > 0) {
-      idle = raw.idle
-    } else {
-      return { id, name, kind: "invalid", error: 'When set, "idle" must be "never" or a positive number of minutes.' }
-    }
-  }
-
-  const entry: Extract<DashboardEntry, { kind: "live" }> = { id, name, kind: "live", url }
-  if (start !== undefined) entry.start = start
-  if (idle !== undefined) entry.idle = idle
-  return entry
-}
-
-async function parseStaticEntry(
-  id: string,
-  name: string,
-  rawPath: unknown,
-  projectFolder: string,
-  dataFolder: string,
-): Promise<DashboardEntry> {
-  if (typeof rawPath !== "string" || rawPath.trim() === "") {
-    return { id, name, kind: "invalid", error: 'A static dashboard "path" must be a non-empty path inside .evie/.' }
-  }
-  const path = rawPath.trim()
-
-  // Verify the `.evie` folder itself is valid and surface the specific reason if refused.
+  const path = typeof given.path === "string" ? given.path.trim() : ""
   try {
     ownEvie(projectFolder, dataFolder)
   } catch (cause) {
-    const error = cause instanceof Error ? cause.message : String(cause)
-    return { id, name, kind: "invalid", error }
+    return invalid(cause instanceof Error ? cause.message : String(cause))
   }
-
-  const resolved = await storageFileAt(projectFolder, path, dataFolder)
-  if (resolved === undefined) {
-    return {
-      id,
-      name,
-      kind: "invalid",
-      error: `Dashboard path "${path}" is missing or outside this project's .evie folder.`,
-    }
+  const file = path === "" ? undefined : await storageFileAt(projectFolder, path, dataFolder)
+  if (file === undefined || !(await stat(file).catch(() => undefined))?.isFile()) {
+    return invalid(`There is no file "${path}" in this project's .evie folder. A static dashboard's "path" is an HTML file inside it.`)
   }
-  const facts = await stat(resolved).catch(() => undefined)
-  if (!facts?.isFile()) {
-    return { id, name, kind: "invalid", error: `Dashboard path "${path}" is not a file in this project's .evie folder.` }
-  }
-
   return { id, name, kind: "static", path }
 }
 
-function nextId(rawId: unknown, name: string, used: Set<string>): string {
-  const base =
-    typeof rawId === "string" && VALID_ID.test(rawId)
-      ? rawId
-      : slugify(name)
-  if (!used.has(base)) {
-    used.add(base)
-    return base
-  }
-  let suffix = 2
-  while (used.has(`${base}-${suffix}`)) suffix++
-  const unique = `${base}-${suffix}`
-  used.add(unique)
-  return unique
+// An id for the tab's address, from its name, made unique by a number after it.
+function unique(base: string, ids: Set<string>): string {
+  let id = base
+  for (let next = 2; ids.has(id); next++) id = `${base}-${next}`
+  ids.add(id)
+  return id
 }
 
-function slugify(name: string): string {
-  const slug = name
+const slug = (name: string) =>
+  name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-  return slug !== "" ? slug : "dashboard"
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
+    .replace(/^-+|-+$/g, "") || "dashboard"

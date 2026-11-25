@@ -2,10 +2,10 @@ import type { HTMLBundle, ServerWebSocket } from "bun"
 import { randomBytes } from "node:crypto"
 import { realpath, stat } from "node:fs/promises"
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path"
-import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type StorageFiles } from "../core/types.ts"
+import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type LiveDashboards, type StorageFiles } from "../core/types.ts"
 import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
 import { companionType } from "../plugins/show/kinds.ts"
-import { createDashboardProxy } from "./dashboard-proxy.ts"
+import { forward } from "./dashboard-proxy.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import { shikiAddress, shikiRoute } from "./shiki-files.ts"
 import { fileRoute } from "./variants.ts"
@@ -56,9 +56,12 @@ export type ServerOptions = {
   // The data folder, where the show tool keeps what a session with no
   // project shows. Without it, the storage route gives none of those.
   dataFolder?: string
-  // How long, in milliseconds, a live dashboard proxy pass lasts between
-  // touches. One hour when left out, which is for tests to change.
-  dashboardPassLasts?: number
+  // A workspace's live dashboards, which the dashboard route opens and
+  // reaches. Without them, it opens none.
+  dashboards?: LiveDashboards
+  // How long, in milliseconds, a preview or dashboard pass lasts after it
+  // was last asked for. An hour when left out, which is for tests to change.
+  passLasts?: number
 }
 
 export type EvieServer = {
@@ -129,40 +132,48 @@ const REMEMBERED = 200
 // from a workspace's Storage, a diff, or a changed file's whole sides: they
 // are not remembered, so they take none of the places. Carried out again,
 // they change nothing.
-const NOT_REMEMBERED: ReadonlySet<string> = new Set([
-  "list_storage",
-  "read_storage",
-  "list_files",
-  "read_changes",
-  "read_file_sides",
-  "list_dashboards",
-  "open_dashboard",
-  "touch_dashboard",
-])
+const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "list_files", "read_changes", "read_file_sides", "list_dashboards"])
 // The images an attachment is given back as, to show: those a browser
 // draws and never runs.
 const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 // How long the code in a sign-in link works: long enough for the browser to
 // open, short enough that a link left in a browser's history is of no use.
 const SIGN_IN_CODE_LASTS = 5 * 60_000
-// How long a preview pass works, and the most kept in memory at once.
-const PREVIEW_PASS_LASTS = 60 * 60_000
-const MOST_PREVIEW_PASSES = 200
+// How long a pass works after it was last asked for, and the most kept in memory at once.
+const PASS_LASTS = 60 * 60_000
+const MOST_PASSES = 200
 // File kinds that can mint a scoped preview pass (for live HTML mockups
 // and 3D scenes that fetch companion buffers/textures by relative path).
 const PREVIEW_TYPES = new Set(["text/html", "model/gltf+json", "model/gltf-binary", "model/stl", "model/obj"])
 
-type PreviewPass = {
-  // The folder that holds the entry file and its companion assets (real path).
-  folder: string
-  // The entry file's name inside `folder`, such as `card.html` or `scene.gltf`.
-  entry: string
-  // The entry file's verified MIME type.
-  entryType: string
-  // The token of the signed-in device that minted this pass; if taken back,
-  // the pass stops working at once.
+// A pass is an address that works without the owner's sign-in, for a page
+// in a sandbox, which has none. It reaches one thing: a preview's folder,
+// or a live dashboard's app. `reaches` says which, as one string, so that
+// asking again for the same thing gives the same pass.
+type PassTarget =
+  | {
+      kind: "preview"
+      reaches: string
+      // The folder that holds the entry file and its companion assets (real path).
+      folder: string
+      // The entry file's name inside `folder`, such as `card.html` or `scene.gltf`.
+      entry: string
+      // The entry file's verified MIME type.
+      entryType: string
+    }
+  | {
+      kind: "dashboard"
+      reaches: string
+      project: string
+      dashboard: string
+      // The app's own address, on this computer.
+      upstream: string
+    }
+type Pass = PassTarget & {
+  // The token of the signed-in device that asked for this pass; if taken
+  // back, the pass stops working at once.
   token: string
-  // When this pass expires, in ms since the epoch.
+  // When this pass stops working, in ms since the epoch, unless asked for again.
   until: number
 }
 
@@ -179,38 +190,51 @@ export function startServer(options: ServerOptions): EvieServer {
   // The code in each sign-in link not yet used, with the time it stops
   // working. It is kept in memory only: a link outlives no restart.
   const codes = new Map<string, number>()
-  // Scoped, short-lived preview passes for sandboxed HTML mockups and 3D
-  // models that need to load companion files by relative path without
-  // carrying the owner's sign-in cookie.
-  const previews = new Map<string, PreviewPass>()
-  // Scoped reverse proxy for live local dashboards, minting per-device
-  // capability URLs under `/dashboard/<pass>/`.
-  const dashboardProxy = createDashboardProxy({
-    prefix: PATHS.dashboard,
-    checkToken: (token) => options.tokens.check(token),
-    ...(options.dashboardPassLasts !== undefined && { passLasts: options.dashboardPassLasts }),
-  })
+  // The passes for sandboxed pages: HTML mockups and 3D models that load
+  // their companion files by relative path, and live dashboards, all without
+  // the owner's sign-in cookie. Oldest asked for first.
+  const passes = new Map<string, Pass>()
 
-  function replyTo(device: string, token: string, message: ClientMessage): Promise<ServerMessage> {
+  // A pass for a device, to what it reaches: the one it was given before,
+  // working for longer, or a new one.
+  function passFor(token: string, wanted: PassTarget): string {
+    const now = Date.now()
+    const until = now + (options.passLasts ?? PASS_LASTS)
+    for (const [id, pass] of passes) if (pass.until <= now) passes.delete(id)
+    for (const [id, pass] of passes) {
+      if (pass.token !== token || pass.reaches !== wanted.reaches) continue
+      passes.delete(id)
+      passes.set(id, { ...pass, until })
+      return id
+    }
+    while (passes.size >= MOST_PASSES) passes.delete(passes.keys().next().value!)
+    const id = randomBytes(32).toString("base64url")
+    passes.set(id, { ...wanted, token, until })
+    return id
+  }
+
+  // The pass of an address after `/preview/` or `/dashboard/`, while it
+  // works and its device's token has not been taken back; otherwise what to answer.
+  function passIn<Kind extends Pass["kind"]>(id: string, kind: Kind): Extract<Pass, { kind: Kind }> | Response {
+    const pass = passes.get(id)
+    if (pass === undefined || pass.kind !== kind || pass.until <= Date.now()) return new Response("Not found.", { status: 404 })
+    let valid: string | undefined
+    try {
+      valid = options.tokens.check(pass.token)
+    } catch {
+      return new Response("The token could not be checked just now. Try again.", { status: 503 })
+    }
+    if (valid === undefined) {
+      passes.delete(id)
+      return new Response("Not found.", { status: 404 })
+    }
+    return pass as Extract<Pass, { kind: Kind }>
+  }
+
+  function replyTo(device: string, message: ClientMessage): Promise<ServerMessage> {
     const carryOut = () =>
       options.evie.send(message.command).then(
-        (result): ServerMessage => {
-          if (message.command.type === "open_dashboard") {
-            const opened = result as Commands["open_dashboard"]["output"]
-            if (opened.kind === "live" && opened.status === "ready") {
-              const pass = dashboardProxy.mint(token, opened.url)
-              return { reply: message.id, result: { kind: "live", status: "ready", url: pass.url, passId: pass.passId } }
-            }
-          }
-          if (message.command.type === "touch_dashboard") {
-            const touched = result as Commands["touch_dashboard"]["output"]
-            if (typeof message.command.passId === "string" && message.command.passId !== "") {
-              const extended = dashboardProxy.touch(message.command.passId, token)
-              return { reply: message.id, result: { ok: touched.ok && extended } }
-            }
-          }
-          return { reply: message.id, result }
-        },
+        (result): ServerMessage => ({ reply: message.id, result }),
         (cause): ServerMessage => ({ reply: message.id, error: cause instanceof Error ? cause.message : String(cause) }),
       )
     // A command its client will never send again, such as its own catch-up
@@ -494,17 +518,9 @@ export function startServer(options: ServerOptions): EvieServer {
     if (file === undefined || type === undefined || !PREVIEW_TYPES.has(type)) {
       return new Response("There is no previewable file there.", { status: 404 })
     }
-    const now = Date.now()
-    for (const [id, pass] of previews) if (pass.until <= now) previews.delete(id)
-    while (previews.size >= MOST_PREVIEW_PASSES) {
-      const oldest = previews.keys().next().value
-      if (oldest === undefined) break
-      previews.delete(oldest)
-    }
-    const id = randomBytes(32).toString("base64url")
     const realFile = await realpath(file)
     const entry = basename(realFile)
-    previews.set(id, { folder: dirname(realFile), entry, entryType: type, token: admitted.token, until: now + PREVIEW_PASS_LASTS })
+    const id = passFor(admitted.token, { kind: "preview", reaches: `preview:${realFile}`, folder: dirname(realFile), entry, entryType: type })
     return Response.json({ url: `${PATHS.preview}/${id}/${encodeURIComponent(entry)}` })
   }
 
@@ -518,21 +534,8 @@ export function startServer(options: ServerOptions): EvieServer {
     if (slash <= 0) return new Response("Not found.", { status: 404 })
     const id = rest.slice(0, slash)
     const rawRel = rest.slice(slash + 1)
-    const pass = previews.get(id)
-    if (pass === undefined || pass.until <= Date.now()) {
-      previews.delete(id)
-      return new Response("Not found.", { status: 404 })
-    }
-    let valid: string | undefined
-    try {
-      valid = options.tokens.check(pass.token)
-    } catch {
-      return new Response("The token could not be checked just now. Try again.", { status: 503 })
-    }
-    if (valid === undefined) {
-      previews.delete(id)
-      return new Response("Not found.", { status: 404 })
-    }
+    const pass = passIn(id, "preview")
+    if (pass instanceof Response) return pass
     let decoded: string
     try {
       decoded = decodeURIComponent(rawRel)
@@ -564,6 +567,43 @@ export function startServer(options: ServerOptions): EvieServer {
     }
     if (pass.entryType === "text/html") headers["Access-Control-Allow-Origin"] = "*"
     return new Response(Bun.file(real), { headers })
+  }
+
+  // Opens a workspace's live dashboard for a signed-in page, starting its
+  // app if need be, and gives the address its sandboxed frame reaches it at:
+  // `/dashboard/<pass>/`. Asked again while the tab is open, it keeps the
+  // app running and gives the same pass, working for longer.
+  async function openDashboard(request: Request, port: number): Promise<Response> {
+    const admitted = admit(request, port)
+    if (admitted instanceof Response) return admitted
+    const asked = new URL(request.url).searchParams
+    const [project, dashboard] = [asked.get("project"), asked.get("id")]
+    if (project === null || dashboard === null) return new Response("Name the dashboard, as /dashboard?project=<id>&id=<its id>.", { status: 400 })
+    if (!options.dashboards) return new Response("This server opens no dashboards.", { status: 404 })
+    const opened = await options.dashboards.open(project, dashboard)
+    if (opened.status !== "ready") return Response.json(opened)
+    const id = passFor(admitted.token, { kind: "dashboard", reaches: `dashboard:${project}:${dashboard}:${opened.url}`, project, dashboard, upstream: opened.url })
+    return Response.json({ ...opened, url: `${PATHS.dashboard}/${id}/` })
+  }
+
+  // A request of a live dashboard's page, through its pass, passed on to its
+  // app. The project's settings are read again each time, so that a
+  // dashboard taken off the list, or a project no longer trusted, is
+  // reached no more.
+  async function dashboardPage(request: Request, path: string): Promise<Response> {
+    const rest = path.slice(`${PATHS.dashboard}/`.length)
+    const slash = rest.indexOf("/")
+    const id = slash === -1 ? rest : rest.slice(0, slash)
+    const pass = passIn(id, "dashboard")
+    if (pass instanceof Response) return pass
+    const now = await options.dashboards?.address(pass.project, pass.dashboard).catch(() => undefined)
+    if (now !== pass.upstream) {
+      passes.delete(id)
+      return new Response("Not found.", { status: 404 })
+    }
+    const prefix = `${PATHS.dashboard}/${id}`
+    if (slash === -1) return new Response(null, { status: 308, headers: { Location: `${prefix}/${new URL(request.url).search}` } })
+    return forward(request, pass.upstream, prefix)
   }
 
   const server = Bun.serve<Connection>({
@@ -598,7 +638,8 @@ export function startServer(options: ServerOptions): EvieServer {
       if (path === PATHS.storage && (request.method === "GET" || request.method === "HEAD")) return storageFile(request, server.port!)
       if (path === PATHS.preview && request.method === "POST") return mintPreview(request, server.port!)
       if (path.startsWith(`${PATHS.preview}/`) && (request.method === "GET" || request.method === "HEAD")) return previewFile(path)
-      if (path === PATHS.dashboard || path.startsWith(`${PATHS.dashboard}/`)) return dashboardProxy.handle(request)
+      if (path === PATHS.dashboard && request.method === "POST") return openDashboard(request, server.port!)
+      if (path.startsWith(`${PATHS.dashboard}/`)) return dashboardPage(request, path)
       if (path === PATHS.login && request.method === "POST") return login(request, server.port!)
       if (path === PATHS.signInLink && request.method === "POST") return signInLink(request, server.port!)
       return new Response("Not found.", { status: 404 })
@@ -670,7 +711,7 @@ export function startServer(options: ServerOptions): EvieServer {
         // after it, and the client skips the second by their numbers.
         const release = open?.session === undefined ? undefined : holdBack(socket, open.session)
         try {
-          const reply = await replyTo(socket.data.device, socket.data.token, message)
+          const reply = await replyTo(socket.data.device, message)
           // The session opened is learned from the reply, before the reply is
           // sent, so the client is sent its events from then on.
           if (open && "result" in reply) {

@@ -19,8 +19,7 @@ export async function startEvie(
     projectFolder?: string
     projectSettings?: NonNullable<EvieOptions["projectSettings"]>
     trust?: NonNullable<EvieOptions["trust"]>
-    isTrusted?: NonNullable<EvieOptions["isTrusted"]>
-    dashboards?: NonNullable<EvieOptions["dashboards"]>
+    dashboardsSetting?: NonNullable<EvieOptions["dashboardsSetting"]>
     settings?: NonNullable<EvieOptions["settings"]>
     syncSetting?: NonNullable<EvieOptions["syncSetting"]>
     compaction?: NonNullable<EvieOptions["compaction"]>
@@ -45,8 +44,7 @@ export async function startEvie(
     plugins,
     ...(options.projectSettings && { projectSettings: options.projectSettings }),
     ...(options.trust && { trust: options.trust }),
-    ...(options.isTrusted && { isTrusted: options.isTrusted }),
-    ...(options.dashboards && { dashboards: options.dashboards }),
+    ...(options.dashboardsSetting && { dashboardsSetting: options.dashboardsSetting }),
     ...(options.settings && { settings: options.settings }),
     ...(options.syncSetting && { syncSetting: options.syncSetting }),
     ...(options.compaction && { compaction: options.compaction }),

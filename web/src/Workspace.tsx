@@ -83,9 +83,8 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
 // tile for every workspace, the one open with a line in its colour on its
 // edge, each with a dot while a session in it needs the owner, then Add a
 // workspace as a dashed tile, and the settings at the bottom. Moving to
-// another workspace keeps the tab.
-// Moving to another workspace keeps Storage or Sessions, and drops any
-// dashboard tab so the chosen workspace opens on its own default tab.
+// another workspace keeps Storage or Sessions open; from a dashboard, it
+// opens on the other workspace's own first tab.
 function Strip({ list, place, back, connection, sessions }: { list: SessionList; place: WorkspacePlace; back: string; connection: Connection; sessions: Sessions }) {
   const carryTab = place.tab === "storage" || place.tab === "sessions" ? place.tab : undefined
   return (
@@ -135,9 +134,9 @@ function Strip({ list, place, back, connection, sessions }: { list: SessionList;
 const EMPTY_DASHBOARDS: DashboardsState = { listed: false, dashboards: [] }
 const noopSubscribe = () => () => {}
 
-// Loads this project's configured dashboards, resolves which tab is active,
-// and holds off drawing the default tab until the dashboards list has arrived
-// so a workspace with dashboards does not flash Sessions first.
+// The workspace's header and its open tab. Which tab opens first depends on
+// whether it has dashboards, so none is drawn until they are listed, and a
+// workspace with dashboards does not show Sessions for a moment first.
 function WorkspaceContent({
   project,
   place,
@@ -174,10 +173,15 @@ function WorkspaceContent({
       <Header project={project} place={place} dashboards={dashState.dashboards} resolved={resolved} chatShown={chatShown} connection={connection} sessions={sessions} />
       <ConnectionLine state={state} />
       <div className="flex min-h-0 flex-1 flex-col @workspace-columns:overflow-y-auto">
+        {dashState.problem !== undefined && (
+          <p role="alert" className="shrink-0 border-b border-line px-gutter py-2 text-caption break-words text-status-failed">
+            The dashboards could not be listed: {dashState.problem}
+          </p>
+        )}
         {resolved === undefined ? (
-          <div className="flex-1 bg-bg" />
+          state.status === "connected" ? null : <Placeholder title="Not connected" text="The workspace's tabs are shown once evie's server answers." />
         ) : resolved.tab === "dashboard" ? (
-          <DashboardView connection={connection} project={project} dashboard={resolved.dashboard} />
+          <DashboardView project={project} dashboard={resolved.dashboard} />
         ) : resolved.tab === "storage" ? (
           <StorageView connection={connection} project={project} place={place} now={now} />
         ) : (
@@ -193,8 +197,9 @@ function WorkspaceContent({
 // Storage, Sessions and Memory pinned to the right, Memory not yet there;
 // and the toggle that hides and shows the side chat. Where the row is short,
 // the name gives way, cut with an ellipsis, down to a width it always keeps,
-// and then the tabs scroll sideways. The open tab's line lies on the
-// header's own line.
+// and then the dashboards' tabs scroll sideways, while Storage, Sessions
+// and Memory stay where they are. The open tab's line lies on the header's
+// own line.
 function Header({
   project,
   place,
@@ -223,21 +228,23 @@ function Header({
           </button>
         </IconPicker>
       </h1>
-      <nav aria-label="Workspace" className="-mb-(--line-width) flex min-w-0 flex-1 items-stretch gap-6 overflow-x-auto">
-        {dashboards.map((entry) => (
-          <Tab
-            key={entry.id}
-            name={entry.name}
-            href={addressOfWorkspace({
-              workspace: place.workspace,
-              tab: "dashboard",
-              dashboard: entry.id,
-              ...(place.chat !== undefined && { chat: place.chat }),
-            })}
-            current={resolved?.tab === "dashboard" && resolved.dashboard.id === entry.id}
-          />
-        ))}
-        <div className="ml-auto flex shrink-0 items-stretch gap-6">
+      <nav aria-label="Workspace" className="-mb-(--line-width) flex min-w-0 flex-1 items-stretch gap-6">
+        <div className="flex min-w-0 flex-1 items-stretch gap-6 overflow-x-auto">
+          {dashboards.map((entry) => (
+            <Tab
+              key={entry.id}
+              name={entry.name}
+              href={addressOfWorkspace({
+                workspace: place.workspace,
+                tab: "dashboard",
+                dashboard: entry.id,
+                ...(place.chat !== undefined && { chat: place.chat }),
+              })}
+              current={resolved?.tab === "dashboard" && resolved.dashboard.id === entry.id}
+            />
+          ))}
+        </div>
+        <div className="flex shrink-0 items-stretch gap-6">
           <Tab
             name="Storage"
             href={addressOfWorkspace({ workspace: place.workspace, tab: "storage", ...(place.chat !== undefined && { chat: place.chat }) })}

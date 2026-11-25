@@ -52,13 +52,14 @@ export async function serve(env: Settings, args: string[] = []) {
     plugins: settings.plugins,
     projectSettings: settings.projectSettings,
     trust: settings.trust,
-    isTrusted: settings.isTrusted,
     syncSetting: settings.syncSetting,
+    dashboardsSetting: settings.dashboardsSetting,
     settingsFile: settings.file,
     settings: editor,
     ...(settings.model !== undefined && { model: settings.model }),
     ...(settings.maxTokens !== undefined && { maxTokens: settings.maxTokens }),
     ...(settings.compaction !== undefined && { compaction: settings.compaction }),
+    ...(settings.liveDashboards !== undefined && { liveDashboards: settings.liveDashboards }),
   }).catch(fail)
 
   // From here on, a problem that stops Evie closes the core first.
@@ -88,6 +89,7 @@ export async function serve(env: Settings, args: string[] = []) {
       ...("app" in built && { app: built.app }),
       attachments: evie.attachments,
       storage: evie.storage,
+      dashboards: evie.dashboards,
       dataFolder: home,
     })
   } catch (cause) {

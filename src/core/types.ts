@@ -764,23 +764,32 @@ export type StorageFile = { path: string; size: number; changed: number } & (
 
 // ---- Dashboards -----------------------------------------------------------------
 
-// One dashboard configured in a trusted project's `.evie/evie.json`: either a
-// static file inside `.evie/`, a live local web app on a loopback address, or
-// an invalid entry kept in place with why it was refused.
+// One of a workspace's dashboards, as its project's `.evie/evie.json` lists
+// it: a static HTML file inside `.evie/`, a live app on this computer with
+// the command that starts it, or an entry that cannot be used, with why.
 export type DashboardEntry =
   | { id: string; name: string; kind: "static"; path: string }
-  | { id: string; name: string; kind: "live"; url: string; start?: string; idle?: number | "never" }
+  | { id: string; name: string; kind: "live"; url: string; start?: string }
   | { id: string; name: string; kind: "invalid"; error: string }
 
-// What opening one of a workspace's dashboards gives back: the path of a
-// static file inside `.evie/`, a ready live dashboard's URL (proxied by the
-// server with a scoped `passId`), why a live dashboard could not be reached,
-// or why the requested dashboard is invalid.
-export type DashboardOpenResult =
-  | { kind: "static"; path: string }
-  | { kind: "live"; status: "ready"; url: string; passId?: string }
-  | { kind: "live"; status: "not_running" | "failed"; message: string; log?: string }
-  | { kind: "invalid"; error: string }
+// What opening a live dashboard gives: where its page is, and whether its
+// app had to be started for it, or why it could not be opened, with the end
+// of what its app printed.
+export type DashboardOpened =
+  | { status: "ready"; url: string; started: boolean }
+  | { status: "not_running" | "failed"; message: string; log?: string }
+
+// A workspace's live dashboards, which the server opens for the page and
+// reaches through its proxy.
+export type LiveDashboards = {
+  // Makes sure a live dashboard's app answers, starting it if need be. Its
+  // `url` is the app's own address, on this computer. Asked again while its
+  // tab is open, it keeps the app from being stopped as idle.
+  open(project: string, id: string): Promise<DashboardOpened>
+  // A live dashboard's address, while its project is trusted and lists it;
+  // otherwise undefined. Asked each time the proxy is used.
+  address(project: string, id: string): Promise<string | undefined>
+}
 
 // ---- Settings -------------------------------------------------------------------
 
@@ -1185,25 +1194,11 @@ export type Commands = {
     input: { project: string }
     output: void
   }
-  // The dashboards configured in a trusted project's `.evie/evie.json`, in
-  // order. Returns an empty list for an untrusted project or one without any.
+  // A workspace's dashboards, in the order its `.evie/evie.json` lists
+  // them. None for a project whose settings are not trusted.
   list_dashboards: {
     input: { project: string }
     output: { dashboards: DashboardEntry[] }
-  }
-  // Opens one dashboard in a project: for a static dashboard, returns its
-  // `.evie/` path; for a live dashboard, ensures the local app is answering
-  // (starting it on demand if configured) and returns its ready URL (which
-  // Evie's server swaps for a scoped `/dashboard/<pass>/` proxy URL and passId).
-  open_dashboard: {
-    input: { project: string; id: string }
-    output: DashboardOpenResult
-  }
-  // Keeps a live dashboard's managed process and scoped proxy pass alive while
-  // the owner is viewing it.
-  touch_dashboard: {
-    input: { project: string; id: string; passId?: string }
-    output: { ok: boolean }
   }
 }
 
@@ -1225,6 +1220,8 @@ export type Core = Omit<Evie, "close"> & {
   attachments: Attachments
   // Storage's files, which the server gives to the page over HTTP.
   storage: StorageFiles
+  // The live dashboards, which the server opens and reaches for the page.
+  dashboards: LiveDashboards
   // Picks up the work an earlier run of Evie left in the data folder: jobs
   // still running, or that ended with no one there to tell, and turns cut
   // off. Then starts the plugins' own work over time. Called once, by the

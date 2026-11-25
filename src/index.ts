@@ -1,5 +1,4 @@
 export { createEvie, dataFolder, type EvieOptions } from "./core/evie.ts"
-export type { DashboardRunnerOptions } from "./core/dashboard-runner.ts"
 export { EndNotKnown } from "./core/jobs.ts"
 export type * from "./core/types.ts"
 export { createOpenRouterProvider, openrouter, type OpenRouterOptions } from "./plugins/openrouter.ts"

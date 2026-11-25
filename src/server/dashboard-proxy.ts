@@ -1,239 +1,89 @@
-import { randomBytes } from "node:crypto"
+// Passes a request of a live dashboard's page on to its app, on this
+// computer, and its answer back. The page is reached at `<prefix>/…`, which
+// stands for the app's own address, and runs in a sandbox: it has no origin
+// of its own, so it can never read Evie's page or the owner's sign-in.
 
-export type DashboardProxyOptions = {
-  prefix: string
-  checkToken(token: string): string | undefined
-  passLasts?: number
-  maxPasses?: number
-}
+// Request headers kept from the app: those about this one connection, and
+// the owner's sign-in. The browser's `accept-encoding` is dropped too, since
+// Bun's fetch asks for compression itself and undoes it.
+const NOT_PASSED_ON = new Set(["host", "connection", "keep-alive", "transfer-encoding", "upgrade", "te", "proxy-connection", "proxy-authorization", "authorization", "origin", "accept-encoding"])
+// Answer headers kept from the browser. The body comes back already
+// uncompressed, so its encoding and length no longer hold. A cookie the app
+// sets would be Evie's own address's, where it could stand in for the
+// owner's sign-in. The app's own framing and content rules give way to the sandbox.
+const NOT_PASSED_BACK = new Set(["connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length", "set-cookie", "x-frame-options", "content-security-policy"])
+// The same as the iframe's sandbox, on every answer, so that a page opened
+// on its own, as in a new browser tab, is sandboxed too.
+const SANDBOX = "frame-ancestors 'self'; sandbox allow-scripts allow-forms allow-downloads allow-popups"
 
-export type DashboardProxy = {
-  mint(token: string, upstreamUrl: string): { passId: string; url: string }
-  touch(passId: string, token: string): boolean
-  handle(request: Request): Promise<Response>
-}
+export async function forward(request: Request, upstream: string, prefix: string): Promise<Response> {
+  const asked = new URL(request.url)
+  const base = new URL(upstream)
+  const basePath = base.pathname.replace(/\/+$/, "")
+  const rest = asked.pathname.slice(prefix.length)
 
-type DashboardPass = {
-  id: string
-  upstream: URL
-  token: string
-  until: number
-}
-
-const DEFAULT_PASS_LASTS = 60 * 60_000
-const DEFAULT_MAX_PASSES = 200
-
-const DROP_REQUEST_HEADERS = new Set([
-  "host",
-  "connection",
-  "keep-alive",
-  "transfer-encoding",
-  "upgrade",
-  "te",
-  "proxy-connection",
-  "proxy-authenticate",
-  "proxy-authorization",
-  "authorization",
-  "origin",
-  "accept-encoding",
-])
-
-const DROP_RESPONSE_HEADERS = new Set([
-  "connection",
-  "keep-alive",
-  "transfer-encoding",
-  "x-frame-options",
-  "content-security-policy",
-])
-
-const SANDBOX_CSP = "frame-ancestors 'self'; sandbox allow-scripts allow-forms allow-downloads allow-popups"
-
-// Strips Evie's own sign-in cookies (`evie_token_*`) from a Cookie header so
-// an embedded dashboard never receives Evie credentials.
-function stripEvieCookies(header: string): string | undefined {
-  const kept: string[] = []
-  for (const part of header.split(";")) {
-    const trimmed = part.trim()
-    if (trimmed === "") continue
-    const eq = trimmed.indexOf("=")
-    const name = (eq === -1 ? trimmed : trimmed.slice(0, eq)).trim()
-    if (name.startsWith("evie_token_")) continue
-    kept.push(trimmed)
-  }
-  return kept.length > 0 ? kept.join("; ") : undefined
-}
-
-// Rewrites relative and same-origin redirect locations under the pass prefix
-// so dashboard navigation stays inside its capability URL.
-function rewriteLocation(location: string, prefix: string, passId: string, upstreamOrigin: string): string {
-  if (location.startsWith("/") && !location.startsWith("//")) {
-    return `${prefix}/${passId}${location}`
-  }
-  if (URL.canParse(location)) {
-    const parsed = new URL(location)
-    if (parsed.origin === upstreamOrigin) {
-      return `${prefix}/${passId}${parsed.pathname}${parsed.search}${parsed.hash}`
-    }
-  }
-  return location
-}
-
-// A scoped reverse proxy for dashboard upstreams. Each pass is a capability
-// URL tied to one signed-in device's token and one upstream base URL; if that
-// device's token is revoked or the pass expires, the proxy stops answering at
-// once. Evie credentials are stripped before forwarding and HTML responses are
-// sandboxed.
-export function createDashboardProxy(options: DashboardProxyOptions): DashboardProxy {
-  const prefix = options.prefix.replace(/\/+$/, "")
-  const passLasts = options.passLasts ?? DEFAULT_PASS_LASTS
-  const maxPasses = options.maxPasses ?? DEFAULT_MAX_PASSES
-  const passes = new Map<string, DashboardPass>()
-
-  function mint(token: string, upstreamUrl: string): { passId: string; url: string } {
-    const now = Date.now()
-    const upstream = new URL(upstreamUrl)
-    for (const [id, pass] of passes) {
-      if (pass.until <= now) passes.delete(id)
-    }
-    for (const [id, pass] of passes) {
-      if (pass.token === token && pass.upstream.href === upstream.href) {
-        pass.until = now + passLasts
-        passes.delete(id)
-        passes.set(id, pass)
-        return { passId: id, url: `${prefix}/${id}/` }
-      }
-    }
-    while (passes.size >= maxPasses) {
-      const oldest = passes.keys().next().value
-      if (oldest === undefined) break
-      passes.delete(oldest)
-    }
-    const id = randomBytes(32).toString("base64url")
-    passes.set(id, { id, upstream, token, until: now + passLasts })
-    return { passId: id, url: `${prefix}/${id}/` }
-  }
-
-  function touch(passId: string, token: string): boolean {
-    const pass = passes.get(passId)
-    if (pass === undefined) return false
-    const now = Date.now()
-    if (pass.until <= now) {
-      passes.delete(passId)
-      return false
-    }
-    if (pass.token !== token) return false
-    pass.until = now + passLasts
-    passes.delete(passId)
-    passes.set(passId, pass)
-    return true
-  }
-
-  async function handle(request: Request): Promise<Response> {
-    const url = new URL(request.url)
-    const lead = `${prefix}/`
-    if (!url.pathname.startsWith(lead)) return new Response("Not found.", { status: 404 })
-    const afterPrefix = url.pathname.slice(lead.length)
-    const slash = afterPrefix.indexOf("/")
-    const passId = slash === -1 ? afterPrefix : afterPrefix.slice(0, slash)
-    const rest = slash === -1 ? "" : afterPrefix.slice(slash)
-    if (passId === "") return new Response("Not found.", { status: 404 })
-
-    const pass = passes.get(passId)
-    if (pass === undefined || pass.until <= Date.now()) {
-      passes.delete(passId)
-      return new Response("Not found.", { status: 404 })
-    }
-
-    let valid: string | undefined
-    try {
-      valid = options.checkToken(pass.token)
-    } catch {
-      return new Response("The token could not be checked just now. Try again.", { status: 503 })
-    }
-    if (valid === undefined) {
-      passes.delete(passId)
-      return new Response("Not found.", { status: 404 })
-    }
-
-    if (rest === "") {
-      return new Response(null, {
-        status: 308,
-        headers: { Location: `${prefix}/${passId}/${url.search}` },
-      })
-    }
-
-    if (request.method === "OPTIONS" && request.headers.has("access-control-request-method")) {
-      return new Response(null, {
-        status: 204,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
-          "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers") ?? "*",
-          "Access-Control-Max-Age": "600",
-        },
-      })
-    }
-
-    const basePath = pass.upstream.pathname.replace(/\/+$/, "")
-    const targetUrl = `${pass.upstream.origin}${basePath}${rest}${url.search}`
-
-    const outHeaders = new Headers()
-    request.headers.forEach((value, key) => {
-      const lower = key.toLowerCase()
-      if (DROP_REQUEST_HEADERS.has(lower)) return
-      if (lower === "cookie") {
-        const cleaned = stripEvieCookies(value)
-        if (cleaned !== undefined) outHeaders.set("cookie", cleaned)
-        return
-      }
-      outHeaders.append(key, value)
-    })
-
-    let upstreamRes: Response
-    try {
-      const init: RequestInit = {
-        method: request.method,
-        headers: outHeaders,
-        redirect: "manual",
-      }
-      if (request.method !== "GET" && request.method !== "HEAD" && request.body !== null) {
-        init.body = request.body
-      }
-      upstreamRes = await fetch(targetUrl, init)
-    } catch {
-      return new Response("This dashboard is not answering.", { status: 502 })
-    }
-
-    const respHeaders = new Headers()
-    upstreamRes.headers.forEach((value, key) => {
-      if (DROP_RESPONSE_HEADERS.has(key.toLowerCase())) return
-      respHeaders.append(key, value)
-    })
-
-    if (upstreamRes.status >= 300 && upstreamRes.status < 400) {
-      const location = respHeaders.get("location")
-      if (location !== null) {
-        respHeaders.set("location", rewriteLocation(location, prefix, passId, pass.upstream.origin))
-      }
-    }
-
-    respHeaders.set("Access-Control-Allow-Origin", "*")
-    respHeaders.set("Cache-Control", "private, no-cache")
-    if (!respHeaders.has("x-content-type-options")) {
-      respHeaders.set("X-Content-Type-Options", "nosniff")
-    }
-
-    const contentType = respHeaders.get("content-type")
-    if (contentType !== null && contentType.toLowerCase().startsWith("text/html")) {
-      respHeaders.set("Content-Security-Policy", SANDBOX_CSP)
-    }
-
-    return new Response(upstreamRes.body, {
-      status: upstreamRes.status,
-      statusText: upstreamRes.statusText,
-      headers: respHeaders,
+  // A sandboxed page has no origin, so a request it sends to the app that
+  // is not a simple one is asked about first. The app is only ever reached
+  // through its pass, so any page holding it may.
+  if (request.method === "OPTIONS" && request.headers.has("access-control-request-method")) {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": request.headers.get("access-control-request-headers") ?? "*",
+        "Access-Control-Max-Age": "600",
+      },
     })
   }
 
-  return { mint, touch, handle }
+  const headers = new Headers()
+  request.headers.forEach((value, key) => {
+    if (NOT_PASSED_ON.has(key)) return
+    if (key === "cookie") {
+      const kept = value
+        .split(";")
+        .map((part) => part.trim())
+        .filter((part) => part !== "" && !part.startsWith("evie_token_"))
+      if (kept.length > 0) headers.set("cookie", kept.join("; "))
+      return
+    }
+    headers.append(key, value)
+  })
+
+  let answer: Response
+  try {
+    answer = await fetch(`${base.origin}${basePath}${rest}${asked.search}`, {
+      method: request.method,
+      headers,
+      redirect: "manual",
+      ...(request.method !== "GET" && request.method !== "HEAD" && request.body !== null && { body: request.body }),
+    })
+  } catch {
+    return new Response("This dashboard's app is not answering. Reload the tab to start it again.", { status: 502 })
+  }
+
+  const back = new Headers()
+  answer.headers.forEach((value, key) => {
+    if (!NOT_PASSED_BACK.has(key)) back.append(key, value)
+  })
+  const location = back.get("location")
+  if (location !== null) back.set("location", throughPass(location, base, basePath, prefix))
+  back.set("Access-Control-Allow-Origin", "*")
+  back.set("Cache-Control", "private, no-cache")
+  back.set("X-Content-Type-Options", "nosniff")
+  back.set("Content-Security-Policy", SANDBOX)
+  return new Response(answer.body, { status: answer.status, statusText: answer.statusText, headers: back })
+}
+
+// Where a redirect of the app's goes, through the pass: an address of the
+// app's own, under its base path, is moved under the prefix. One relative
+// to the page, such as `login`, already is. Any other, such as another
+// site's, is left as it is.
+function throughPass(location: string, base: URL, basePath: string, prefix: string): string {
+  if (!location.startsWith("/") && !/^[a-z][a-z0-9+.-]*:/i.test(location)) return location
+  const to = URL.canParse(location, base.href) ? new URL(location, base) : undefined
+  if (to === undefined || to.origin !== base.origin) return location
+  if (to.pathname !== basePath && !to.pathname.startsWith(`${basePath}/`)) return location
+  return `${prefix}${to.pathname.slice(basePath.length) || "/"}${to.search}${to.hash}`
 }

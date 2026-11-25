@@ -54,6 +54,11 @@ import { replaceFile, type Settings } from "./settings.ts"
 //
 //   { "server": { "host": "127.0.0.1", "port": 3843, "origins": ["http://localhost:5173"] } }
 //
+// A project's own file lists its workspace's dashboards under "dashboards".
+// `liveDashboards` in the global file says how long the app of a live one
+// may go unused, in minutes, before it is stopped, and how many may run at
+// once: `{ "liveDashboards": { "idleMinutes": 10, "mostRunning": 3 } }`.
+//
 // A plugin is a built-in one, named, or a file, given by its path. A plugin
 // file is code that runs with Evie's full permissions, and switching a plugin
 // off can remove a protection such as the guard. So a project's settings file
@@ -83,8 +88,6 @@ export type SettingsFiles = {
   trust(folder: string): Promise<void>
   // Stops trusting a project, by its folder, as answering no does.
   untrust(folder: string): Promise<void>
-  // Whether a project, by its folder, is currently trusted.
-  isTrusted(folder: string): boolean
   // The global plugins as the global file listed them when it was read,
   // each by the name or the path it is given by, the ones under
   // "addPlugins" last.
@@ -102,6 +105,13 @@ export type SettingsFiles = {
   // read each time it is asked; undefined when the file sets nothing, or
   // the project is not trusted.
   syncSetting(project: Project): Promise<Sync | undefined>
+  // A project's `dashboards` list, by its own settings file, read each time
+  // it is asked, as it is: undefined when the file sets none, or the project
+  // is not trusted.
+  dashboardsSetting(project: Project): Promise<unknown>
+  // How long a live dashboard's app may go unasked for, in minutes, before
+  // it is stopped, and how many may run at once, when the global file says.
+  liveDashboards?: { idleMinutes?: number; mostRunning?: number }
 }
 
 // "private" backs a project's `.evie/` folder up to a private repository of
@@ -132,10 +142,10 @@ type SettingsFile = {
   disable?: string[]
   server?: { host?: string; port?: number; origins?: string[] }
   sync?: Sync
-  // Workspace dashboards configured in a project's `.evie/evie.json`.
-  // Validated per-entry when read by `readDashboards`, so a bad entry never
-  // breaks the whole settings file.
+  // A project's dashboards. Each entry is checked as it is read, so that a
+  // wrong one is shown on its own tab and breaks nothing else.
   dashboards?: unknown
+  liveDashboards?: { idleMinutes?: number; mostRunning?: number }
 }
 
 // What a built-in plugin is made from: its options from the settings file,
@@ -211,6 +221,10 @@ export async function loadSettingsFiles(options: { env: Settings; adding?: strin
     if (!trusted.has(project.folder)) return undefined
     return (await readSettingsFile(join(project.folder, ".evie", "evie.json")))?.sync
   }
+  async function dashboardsSetting(project: Project): Promise<unknown> {
+    if (!trusted.has(project.folder)) return undefined
+    return (await readSettingsFile(join(project.folder, ".evie", "evie.json")))?.dashboards
+  }
   // Asked each time it matters, since a project can be trusted while Evie runs.
   const context: Context = { env: options.env, home, globalFile, permissions: global.permissions ?? {}, trusted: (folder) => trusted.has(folder), syncSetting }
 
@@ -271,8 +285,9 @@ export async function loadSettingsFiles(options: { env: Settings; adding?: strin
       trusted.add(folder)
       untrusted.delete(folder)
     },
-    isTrusted: (folder) => trusted.has(folder),
     syncSetting,
+    dashboardsSetting,
+    ...(global.liveDashboards !== undefined && { liveDashboards: global.liveDashboards }),
     async projectSettings(project, asking) {
       const projectFile = join(project.folder, ".evie", "evie.json")
       const own = await readSettingsFile(projectFile)
@@ -521,7 +536,19 @@ function checkSettings(parsed: unknown, file: string): SettingsFile {
   }
   checkPermissions(settings.permissions, file)
   checkServer(settings.server, file)
+  checkLiveDashboards(settings.liveDashboards, file)
   return settings as SettingsFile
+}
+
+function checkLiveDashboards(value: unknown, file: string): void {
+  if (value === undefined) return
+  const wrong = (): never => {
+    throw new Error(`In ${file}, "liveDashboards" must be { "idleMinutes": <minutes above zero>, "mostRunning": <a whole number above zero> }, either one left out for its default.`)
+  }
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return wrong()
+  const { idleMinutes, mostRunning } = value as Record<string, unknown>
+  if (idleMinutes !== undefined && !(typeof idleMinutes === "number" && Number.isFinite(idleMinutes) && idleMinutes > 0)) wrong()
+  if (mostRunning !== undefined && !(Number.isInteger(mostRunning) && (mostRunning as number) > 0)) wrong()
 }
 
 function checkServer(value: unknown, file: string): void {

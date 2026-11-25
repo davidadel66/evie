@@ -1,24 +1,17 @@
-import type { DashboardEntry, DashboardOpenResult, Evie } from "../../src/core/types.ts"
+import type { DashboardEntry, DashboardOpened, Evie } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
-import { addressOf as storageAddressOf, previewMintOf } from "./shown.ts"
 
-// A workspace's dashboards, apart from its screen: listed from the project's
-// `.evie/evie.json` once connected, listed again whenever the line comes back
-// (since nothing pushes config edits), and kept alive while a live dashboard
-// is open through a periodic heartbeat.
+// A workspace's dashboards, apart from its screen: listed from its
+// project's settings once connected, and again each time the line comes
+// back, since nothing tells the page of an edit to them. And what a live
+// dashboard's tab shows, as it opens the dashboard and asks for it again
+// while it is open.
 
-export const HEARTBEAT_MS = 30_000
-
-export type DashboardsState = {
-  listed: boolean
-  dashboards: DashboardEntry[]
-  problem?: string
-}
+export type DashboardsState = { listed: boolean; dashboards: DashboardEntry[]; problem?: string }
 
 export type Dashboards = {
   state(): DashboardsState
   subscribe(listener: () => void): () => void
-  refresh(): void
   close(): void
 }
 
@@ -27,43 +20,24 @@ export function openDashboards(connection: Connection, project: string): Dashboa
   const listeners = new Set<() => void>()
   let closed = false
   let asked = 0
+  let listedOver: Evie | undefined
 
   function set(next: DashboardsState) {
     state = next
     for (const listener of [...listeners]) listener()
   }
 
-  const clientOf = (): Evie | undefined => {
+  function follow() {
     const now = connection.state()
-    return now.status === "connected" ? now.evie : undefined
-  }
-
-  function list() {
-    const evie = clientOf()
+    const evie = now.status === "connected" ? now.evie : undefined
+    if (evie === listedOver) return
+    listedOver = evie
     if (evie === undefined) return
     const ask = ++asked
     evie.send({ type: "list_dashboards", project }).then(
-      ({ dashboards }) => {
-        if (closed || ask !== asked) return
-        set({ listed: true, dashboards })
-      },
-      (cause: unknown) => {
-        if (closed || ask !== asked) return
-        set({ listed: true, dashboards: state.dashboards, problem: wordsOf(cause) })
-      },
+      ({ dashboards }) => !closed && ask === asked && set({ listed: true, dashboards }),
+      (cause: unknown) => !closed && ask === asked && set({ listed: true, dashboards: state.dashboards, problem: cause instanceof Error ? cause.message : String(cause) }),
     )
-  }
-
-  // List immediately once connected, and re-list every time the connection
-  // returns after a drop so changes to `.evie/evie.json` appear.
-  let connected: Evie | undefined
-  function follow() {
-    const evie = clientOf()
-    if (evie !== undefined && evie !== connected) {
-      connected = evie
-      list()
-    }
-    if (evie === undefined) connected = undefined
   }
   const unfollow = connection.subscribe(follow)
   follow()
@@ -74,9 +48,6 @@ export function openDashboards(connection: Connection, project: string): Dashboa
       listeners.add(listener)
       return () => void listeners.delete(listener)
     },
-    refresh() {
-      list()
-    },
     close() {
       closed = true
       unfollow()
@@ -84,76 +55,32 @@ export function openDashboards(connection: Connection, project: string): Dashboa
   }
 }
 
-// The POST URL that mints a scoped preview pass for a static dashboard file
-// inside a project's `.evie` folder.
-export function dashboardPreviewMintUrl(project: string, path: string): string {
-  return previewMintOf(storageAddressOf({ project, path }))
-}
-
-// Opens a dashboard over the connection's current client. Returns undefined
-// when the connection is not currently connected.
-export async function openDashboard(connection: Connection, project: string, id: string): Promise<DashboardOpenResult | undefined> {
-  const now = connection.state()
-  if (now.status !== "connected") return undefined
-  return now.evie.send({ type: "open_dashboard", project, id })
-}
-
-export type DashboardHeartbeat = {
-  // Sends one touch immediately, as when returning from a backgrounded tab
-  // or laptop sleep.
-  touchNow(): void
-  stop(): void
-}
-
-// Keeps a live dashboard's managed process and scoped proxy pass alive while
-// it is open. Every `intervalMs` (30s by default), sends `touch_dashboard`.
-// When the server answers `{ ok: false }` (such as after laptop sleep expired
-// the pass), invokes `onExpired` once and stops itself so the view can re-open.
-export function startDashboardHeartbeat(
-  connection: Connection,
-  target: { project: string; id: string; passId?: string },
-  onExpired: () => void,
-  intervalMs = HEARTBEAT_MS,
-): DashboardHeartbeat {
-  let stopped = false
-  let inFlight = false
-
-  function touch() {
-    if (stopped || inFlight) return
-    const now = connection.state()
-    if (now.status !== "connected") return
-    inFlight = true
-    now.evie
-      .send({
-        type: "touch_dashboard",
-        project: target.project,
-        id: target.id,
-        ...(target.passId !== undefined && { passId: target.passId }),
-      })
-      .then(
-        (res) => {
-          inFlight = false
-          if (stopped) return
-          if (!res.ok) {
-            stop()
-            onExpired()
-          }
-        },
-        () => {
-          inFlight = false
-        },
-      )
+// Opens a live dashboard through the server, with this browser's sign-in
+// cookie: its app is started if need be, and the page is given the address
+// its frame reaches it at. Asked again while the tab is open, it keeps the
+// app running and the address working.
+export async function openLive(project: string, id: string): Promise<DashboardOpened> {
+  try {
+    const answer = await fetch(`/dashboard?${new URLSearchParams({ project, id })}`, { method: "POST" })
+    if (!answer.ok) return { status: "failed", message: (await answer.text()) || `evie's server answered ${answer.status}.` }
+    return (await answer.json()) as DashboardOpened
+  } catch (cause) {
+    return { status: "failed", message: `evie's server could not be reached: ${cause instanceof Error ? cause.message : String(cause)}` }
   }
-
-  const timer = setInterval(touch, intervalMs)
-
-  function stop() {
-    if (stopped) return
-    stopped = true
-    clearInterval(timer)
-  }
-
-  return { touchNow: touch, stop }
 }
 
-const wordsOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause))
+// What a live dashboard's tab shows: nothing yet while it opens, its page,
+// or why it could not be opened. `load` counts the times the page has been
+// loaded from the start, so that the frame loads it again when it changes.
+export type LiveShown = { status: "opening" } | { status: "ready"; url: string; load: number } | Exclude<DashboardOpened, { status: "ready" }>
+
+// What the tab shows once the dashboard has been opened, or asked for again.
+// The page stays as it is while its app keeps running. It is loaded again
+// when its app had to be started again, as after it crashed or was stopped
+// to make room for another, since the page drawn is of the app that stopped.
+export function afterOpening(shown: LiveShown, opened: DashboardOpened): LiveShown {
+  if (opened.status !== "ready") return opened
+  if (shown.status !== "ready") return { status: "ready", url: opened.url, load: 0 }
+  if (!opened.started && opened.url === shown.url) return shown
+  return { status: "ready", url: opened.url, load: shown.load + 1 }
+}
