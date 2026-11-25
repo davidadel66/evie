@@ -854,6 +854,14 @@ session list or the session details. The page then has three other columns:
   folder, or that is, holds, or is inside evie's data folder, which holds
   your keys, as for a project at your home folder. The files attached to
   messages are here, under `attachments/`.
+  A row's trash icon, shown as you point at the row, or always and faintly
+  on a phone, deletes the file, or the folder with everything in it, once
+  you say yes in a dialog that names it and counts what goes. It warns
+  when earlier messages show what goes, as those under `attachments/` and
+  `shown/` are, and for the workspace's own `evie.json`. A delete is for
+  good, though a backed-up folder's history keeps the old copy from its
+  next sync. A link is deleted itself, never what it leads to, and the
+  `.evie` folder itself and its own git repository are never deleted.
 - **The side chat,** on the right, is a small chat with evie about the
   workspace. Its header says evie over the chat's title, with New chat,
   Open this chat full size, which opens it in the session view, and Close

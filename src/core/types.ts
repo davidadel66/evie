@@ -1166,6 +1166,24 @@ export type Commands = {
     input: { project: string; path: string }
     output: StorageFile
   }
+  // What deleting a file or folder of a project's `.evie/` folder would
+  // take, by its path inside it, for the owner to see first: a file is one
+  // file, a folder every file and folder in it, however deep, a link one
+  // file. Refused as `delete_storage` refuses.
+  count_storage: {
+    input: { project: string; path: string }
+    output: { files: number; folders: number }
+  }
+  // Deletes a file, or a folder with everything in it, from a project's
+  // `.evie/` folder, by its path inside it, for good. A link is deleted
+  // itself, never what it leads to. Refused, saying why, is anything
+  // `list_storage` refuses, the `.evie/` folder itself, its own git
+  // repository however the path reaches it, and what is not there. A
+  // backup keeps what went in its history, from its next sync.
+  delete_storage: {
+    input: { project: string; path: string }
+    output: void
+  }
   // The files of a project the owner can mention with @, by their paths
   // from its folder, with slashes: in a git repository the files git lists,
   // tracked or not, but not those it ignores, and elsewhere every file, the

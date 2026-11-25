@@ -16,7 +16,7 @@ import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "
 import { createQuestions } from "./questions.ts"
 import { createAttachments } from "./attachments.ts"
 import { listProjectFiles } from "./project-files.ts"
-import { listStorage, readStorage, storageFileAt } from "./storage.ts"
+import { countStorage, deleteStorage, listStorage, readStorage, storageFileAt } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
 import { MESSAGE_LIMIT, MESSAGE_TOO_LONG, PAGE_BYTES, type Ask, type Children, type Commands, type Core, type EvieEvent, type Host, type JobRecord, type JobWork, type Plugin, type Project, type ProjectSettings, type Provider, type SettingsEditor } from "./types.ts"
@@ -1217,6 +1217,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await listStorage(projectFor(command.project).folder, command.folder, home)) as Output
         case "read_storage":
           return (await readStorage(projectFor(command.project).folder, command.path, home)) as Output
+        case "count_storage":
+          return (await countStorage(projectFor(command.project).folder, command.path, home)) as Output
+        case "delete_storage":
+          return (await deleteStorage(projectFor(command.project).folder, command.path, home)) as Output
         case "list_files":
           return (await listProjectFiles(projectFor(command.project).folder, { dataFolder: home })) as Output
         case "open_folder":
