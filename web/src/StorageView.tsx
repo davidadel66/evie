@@ -1,11 +1,13 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
 import type { ListedProject, StorageEntry } from "../../src/core/types.ts"
 import type { Connection } from "./connection.ts"
-import { CaretLeft, CaretRight, File, FileImage, Folder } from "./icons.tsx"
+import { Button } from "./components/ui/button.tsx"
+import { Dialog, DialogClose, DialogContent, DialogTitle } from "./components/ui/dialog.tsx"
+import { CaretLeft, CaretRight, File, FileImage, Folder, Trash } from "./icons.tsx"
 import { ageWords } from "./session-list.ts"
 import { ShownFrame } from "./Shown.tsx"
 import { storageShown } from "./shown.ts"
-import { openStorage, type Storage, type StorageState } from "./storage.ts"
+import { deleteWords, openStorage, type Counted, type Storage, type StorageState } from "./storage.ts"
 import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.ts"
 
 // The workspace's Storage tab: the files in its project's .evie folder,
@@ -16,7 +18,9 @@ import { addressOfWorkspace, sizeWords, type WorkspacePlace } from "./workspace.
 // folder folds by its caret, as T3 Code's trees do. At its foot, whether
 // the folder is backed up. A file opens in the workspace, read only, in
 // place of the tree: one of a kind evie shows in the frame it is shown in
-// under a reply, any other as its text or picture.
+// under a reply, any other as its text or picture. A row's trash icon, shown
+// as the row is hovered, or always and faintly on a screen with no hover,
+// deletes it once the owner has said yes in a dialog that says how much goes.
 export function StorageView({ connection, project, place, now }: { connection: Connection; project: ListedProject; place: WorkspacePlace; now: number }) {
   const [storage, setStorage] = useState<{ project: string; storage: Storage }>()
   useEffect(() => {
@@ -30,6 +34,7 @@ export function StorageView({ connection, project, place, now }: { connection: C
 
 function Shown({ storage, project, place, now }: { storage: Storage; project: ListedProject; place: WorkspacePlace; now: number }) {
   const state = useSyncExternalStore(storage.subscribe, storage.state)
+  const [asked, setAsked] = useState<StorageEntry>()
   useEffect(() => storage.show(place.file), [storage, place.file])
   const { file: _, ...here } = place
   const back = addressOfWorkspace({ ...here, tab: "storage" })
@@ -45,11 +50,12 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
         <Quiet>Nothing in the .evie folder yet. What evie keeps for this workspace, the files attached to messages and what evie shows you will be here.</Quiet>
       ) : (
         <ul className="flex flex-col">
-          <Entries entries={top.entries} depth={0} state={state} storage={storage} place={place} now={now} />
+          <Entries entries={top.entries} depth={0} state={state} storage={storage} place={place} now={now} ask={setAsked} />
           <More count={top.more ?? 0} indent={0} />
         </ul>
       )}
       <p className="border-t border-line pt-3 text-caption text-text-muted">{project.syncs ? "Backed up privately" : "Kept on this computer"}</p>
+      <DeleteDialog entry={asked} storage={storage} close={() => setAsked(undefined)} />
     </section>
   )
 }
@@ -57,21 +63,32 @@ function Shown({ storage, project, place, now }: { storage: Storage; project: Li
 // The rows of a folder's entries, each folder's own entries under it while
 // it is open. A folder folds and opens again as its row is picked, its
 // caret turning; a file's row keeps the caret's room, so that the icons of
-// a level line up.
-function Entries({ entries, depth, state, storage, place, now }: { entries: StorageEntry[]; depth: number; state: StorageState; storage: Storage; place: WorkspacePlace; now: number }) {
+// a level line up. Each row ends in its trash icon, which asks first.
+function Entries({ entries, depth, state, storage, place, now, ask }: { entries: StorageEntry[]; depth: number; state: StorageState; storage: Storage; place: WorkspacePlace; now: number; ask(entry: StorageEntry): void }) {
   const indent = indentOf(depth)
   return entries.map((entry) => {
     const age = <span className="shrink-0 text-caption text-text-muted">{ageWords(entry.changed, now)}</span>
+    const trash = (
+      <Button
+        variant="icon"
+        aria-label={`Delete ${entry.name}`}
+        onClick={() => ask(entry)}
+        className="ml-1 size-control-sm opacity-0 group-hover:opacity-100 hover:text-status-failed focus-visible:opacity-100 [@media(hover:none)]:opacity-60"
+      >
+        <Trash />
+      </Button>
+    )
     if (entry.kind === "file") {
       const Icon = /\.(png|jpe?g|gif|webp|svg)$/i.test(entry.name) ? FileImage : File
       return (
-        <li key={entry.path}>
-          <a href={addressOfWorkspace({ ...place, tab: "storage", file: entry.path })} style={indent} className="flex h-row-height items-center gap-2 border-t border-line">
+        <li key={entry.path} className="group flex h-row-height items-center border-t border-line">
+          <a href={addressOfWorkspace({ ...place, tab: "storage", file: entry.path })} style={indent} className="flex h-full min-w-0 flex-1 items-center gap-2">
             <span aria-hidden="true" className="size-icon-caret shrink-0" />
             <Icon className="size-icon-sm shrink-0 text-text-muted" />
             <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
             {age}
           </a>
+          {trash}
         </li>
       )
     }
@@ -79,12 +96,15 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
     const inside = state.folders.get(entry.path)
     return (
       <li key={entry.path} className="flex flex-col">
-        <button type="button" aria-expanded={open} onClick={() => storage.toggle(entry.path)} style={indent} className="flex h-row-height items-center gap-2 border-t border-line text-left">
-          <CaretRight className={`size-icon-caret shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
-          <Folder className="size-icon-sm shrink-0 text-text-muted" />
-          <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
-          {age}
-        </button>
+        <div className="group flex h-row-height items-center border-t border-line">
+          <button type="button" aria-expanded={open} onClick={() => storage.toggle(entry.path)} style={indent} className="flex h-full min-w-0 flex-1 items-center gap-2 text-left">
+            <CaretRight className={`size-icon-caret shrink-0 text-text-muted transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
+            <Folder className="size-icon-sm shrink-0 text-text-muted" />
+            <span className="min-w-0 flex-1 truncate font-mono text-code text-text">{entry.name}</span>
+            {age}
+          </button>
+          {trash}
+        </div>
         {open && (
           <ul className="flex flex-col">
             {inside?.problem !== undefined ? (
@@ -95,7 +115,7 @@ function Entries({ entries, depth, state, storage, place, now }: { entries: Stor
               <Quiet indent={depth + 1}>Nothing in this folder.</Quiet>
             ) : (
               <>
-                <Entries entries={inside.entries} depth={depth + 1} state={state} storage={storage} place={place} now={now} />
+                <Entries entries={inside.entries} depth={depth + 1} state={state} storage={storage} place={place} now={now} ask={ask} />
                 <More count={inside.more ?? 0} indent={depth + 1} />
               </>
             )}
@@ -150,6 +170,62 @@ function FileShown({ state, path, back, now, project }: { state: StorageState; p
         )}
       </div>
     </div>
+  )
+}
+
+// Asks whether to delete a file, or a folder with everything in it, for
+// good, naming it by its path and saying how much goes, as the server
+// counts it, with a warning when earlier messages use what goes. It stays
+// open while it is deleted, and says why when the server refuses.
+function DeleteDialog({ entry, storage, close }: { entry: StorageEntry | undefined; storage: Storage; close(): void }) {
+  const [counted, setCounted] = useState<{ path: string; counted: Counted | undefined }>()
+  const [deleting, setDeleting] = useState(false)
+  const [problem, setProblem] = useState<string>()
+  const path = entry?.path
+  const folder = entry?.kind === "folder"
+  useEffect(() => {
+    setDeleting(false)
+    setProblem(undefined)
+    if (path === undefined || !folder) return
+    let current = true
+    void storage.count(path).then((each) => current && setCounted({ path, counted: each }))
+    return () => {
+      current = false
+    }
+  }, [storage, path, folder])
+  const words = entry === undefined ? undefined : deleteWords(entry, counted?.path === entry.path ? counted.counted : undefined)
+  async function confirm() {
+    if (entry === undefined) return
+    setDeleting(true)
+    const refused = await storage.remove(entry.path)
+    setDeleting(false)
+    if (refused === undefined) close()
+    else setProblem(refused)
+  }
+  return (
+    <Dialog open={entry !== undefined} onOpenChange={(open) => !open && close()}>
+      <DialogContent>
+        <DialogTitle>{folder ? "Delete this folder for good?" : "Delete this file for good?"}</DialogTitle>
+        <p className="text-body break-words text-text-muted">
+          <span className="font-mono text-code break-all text-text">{path}</span>
+          {words?.goes} This cannot be undone.
+        </p>
+        {words?.warning !== undefined && <p className="text-body text-text">{words.warning}</p>}
+        {problem !== undefined && (
+          <p role="status" className="text-caption break-words text-text-muted">
+            {problem}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <DialogClose asChild>
+            <Button variant="secondary">Cancel</Button>
+          </DialogClose>
+          <Button variant="secondary" className="text-status-failed" disabled={deleting} onClick={confirm}>
+            {deleting ? "Deleting…" : "Delete"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 

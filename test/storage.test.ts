@@ -202,3 +202,103 @@ test("a folder is listed up to 500 entries, by name, and says how many more it h
   expect(listed.entries.at(-1)!.name).toBe("note-500.md")
   expect(listed.more).toBe(3)
 })
+
+test("a file, or a folder with everything in it, is deleted from Storage for good, and a folder's files are counted first", async () => {
+  const run = await start()
+  await mkdir(join(run.evieFolder, "youtube", "Karpathy"), { recursive: true })
+  await mkdir(join(run.evieFolder, "youtube", "Veritasium", "Shorts"), { recursive: true })
+  await writeFile(join(run.evieFolder, "youtube", "Karpathy", "Intro to LLMs.md"), "# Intro\n")
+  await writeFile(join(run.evieFolder, "youtube", "Karpathy", "GPT from scratch.md"), "# GPT\n")
+  await writeFile(join(run.evieFolder, "youtube", "Veritasium", "Shorts", "Why.md"), "# Why\n")
+  await writeFile(join(run.evieFolder, "youtube", "index.md"), "# Saved\n")
+  await writeFile(join(run.evieFolder, "notes.md"), "# Beds\n")
+  const project = run.project!.id
+  const top = async () => (await run.evie.send({ type: "list_storage", project })).entries.map((entry) => entry.path)
+
+  expect(await run.evie.send({ type: "count_storage", project, path: "youtube" })).toEqual({ files: 4, folders: 3 })
+  expect(await run.evie.send({ type: "count_storage", project, path: "notes.md" })).toEqual({ files: 1, folders: 0 })
+
+  expect(await run.evie.send({ type: "delete_storage", project, path: "youtube/Karpathy/Intro to LLMs.md" })).toBeUndefined()
+  expect((await run.evie.send({ type: "list_storage", project, folder: "youtube/Karpathy" })).entries.map((entry) => entry.name)).toEqual(["GPT from scratch.md"])
+  await run.evie.send({ type: "delete_storage", project, path: "youtube" })
+  expect(await top()).toEqual(["notes.md"])
+  await run.evie.send({ type: "delete_storage", project, path: "./notes.md" })
+  expect(await top()).toEqual([])
+})
+
+test("Storage deletes nothing outside the .evie folder, not the folder itself, nor its own git repository, nor what is not there", async () => {
+  const run = await start()
+  const outside = await tempFolder("evie-outside-")
+  await writeFile(join(outside, "secret.txt"), "not yours\n")
+  await mkdir(join(run.evieFolder, ".git"), { recursive: true })
+  await writeFile(join(run.evieFolder, ".git", "config"), "[remote]\n")
+  await writeFile(join(run.evieFolder, "notes.md"), "# Beds\n")
+  await symlink(outside, join(run.evieFolder, "away"))
+  await symlink(run.evieFolder, join(run.evieFolder, "self"))
+  const project = run.project!.id
+  const refusals: [string, string][] = [
+    ["..", ".. is outside this project's .evie folder. Storage holds only what is inside it."],
+    [join(outside, "secret.txt"), `${join(outside, "secret.txt")} is outside this project's .evie folder. Storage holds only what is inside it.`],
+    ["away/secret.txt", "away/secret.txt is outside this project's .evie folder. Storage holds only what is inside it."],
+    ["", "Storage deletes what is inside this project's .evie folder, never the folder itself."],
+    [".", "Storage deletes what is inside this project's .evie folder, never the folder itself."],
+    [".git", ".git is the .evie folder's own git repository, which backs it up, and not one of its files."],
+    [".git/config", ".git/config is the .evie folder's own git repository, which backs it up, and not one of its files."],
+    ["self/.git", "self/.git is the .evie folder's own git repository, which backs it up, and not one of its files."],
+    ["self/.git/config", "self/.git/config is the .evie folder's own git repository, which backs it up, and not one of its files."],
+    ["gone.txt", "There is no file or folder gone.txt in this project's .evie folder."],
+    ["gone/notes.md", "There is no file or folder gone/notes.md in this project's .evie folder."],
+    ["notes.md/inside", "There is no file or folder notes.md/inside in this project's .evie folder."],
+  ]
+
+  for (const [path, refused] of refusals) {
+    await expect(run.evie.send({ type: "delete_storage", project, path })).rejects.toThrow(refused)
+    await expect(run.evie.send({ type: "count_storage", project, path })).rejects.toThrow(refused)
+  }
+  expect(await Bun.file(join(outside, "secret.txt")).text()).toBe("not yours\n")
+  expect(await Bun.file(join(run.evieFolder, ".git", "config")).text()).toBe("[remote]\n")
+  expect(await Bun.file(join(run.evieFolder, "notes.md")).text()).toBe("# Beds\n")
+})
+
+test("a link in Storage is deleted itself, never what it leads to, and a file reached through a link inside the .evie folder is the file", async () => {
+  const run = await start()
+  const outside = await tempFolder("evie-outside-")
+  await writeFile(join(outside, "secret.txt"), "not yours\n")
+  await mkdir(join(run.evieFolder, "files"), { recursive: true })
+  await writeFile(join(run.evieFolder, "files", "kept.txt"), "kept\n")
+  await writeFile(join(run.evieFolder, "files", "old.txt"), "old\n")
+  await symlink(join(run.evieFolder, "files"), join(run.evieFolder, "shortcut"))
+  await symlink(outside, join(run.evieFolder, "away"))
+  const project = run.project!.id
+
+  expect(await run.evie.send({ type: "count_storage", project, path: "shortcut" })).toEqual({ files: 1, folders: 0 })
+  await run.evie.send({ type: "delete_storage", project, path: "shortcut/old.txt" })
+  await run.evie.send({ type: "delete_storage", project, path: "shortcut" })
+  await run.evie.send({ type: "delete_storage", project, path: "away" })
+
+  expect((await run.evie.send({ type: "list_storage", project })).entries.map((entry) => entry.path)).toEqual(["files"])
+  expect((await run.evie.send({ type: "list_storage", project, folder: "files" })).entries.map((entry) => entry.path)).toEqual(["files/kept.txt"])
+  expect(await Bun.file(join(outside, "secret.txt")).text()).toBe("not yours\n")
+})
+
+test("the .evie folder's own git repository is not listed or read through a link to the .evie folder either", async () => {
+  const run = await start()
+  await mkdir(join(run.evieFolder, ".git"), { recursive: true })
+  await writeFile(join(run.evieFolder, ".git", "config"), "[remote]\n")
+  await writeFile(join(run.evieFolder, "notes.md"), "# Beds\n")
+  await symlink(run.evieFolder, join(run.evieFolder, "self"))
+  await symlink(join(run.evieFolder, ".git"), join(run.evieFolder, "history"))
+  const project = run.project!.id
+
+  expect((await run.evie.send({ type: "list_storage", project })).entries.map((entry) => entry.path)).toEqual(["self", "notes.md"])
+  expect((await run.evie.send({ type: "list_storage", project, folder: "self" })).entries.map((entry) => entry.path)).toEqual(["self/self", "self/notes.md"])
+  await expect(run.evie.send({ type: "list_storage", project, folder: "self/.git" })).rejects.toThrow(
+    "self/.git is the .evie folder's own git repository, which backs it up, and not one of its files.",
+  )
+  await expect(run.evie.send({ type: "read_storage", project, path: "self/.git/config" })).rejects.toThrow(
+    "self/.git/config is the .evie folder's own git repository, which backs it up, and not one of its files.",
+  )
+  await expect(run.evie.send({ type: "read_storage", project, path: "history/config" })).rejects.toThrow(
+    "history/config is the .evie folder's own git repository, which backs it up, and not one of its files.",
+  )
+})

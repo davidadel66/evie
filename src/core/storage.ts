@@ -1,11 +1,12 @@
 import { realpathSync } from "node:fs"
-import { readdir, readFile, realpath, stat } from "node:fs/promises"
+import { lstat, readdir, readFile, realpath, rm, stat } from "node:fs/promises"
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path"
 import type { StorageEntry, StorageFile } from "./types.ts"
 
 // A workspace's Storage: what its project's `.evie/` folder holds, as a
-// client shows it, listed a folder at a time and read a file at a time.
-// Nothing outside that folder is listed or read: a path is refused when it
+// client shows it, listed a folder at a time and read a file at a time,
+// and a file or folder in it deleted, as the owner asks.
+// Nothing outside that folder is listed, read or deleted: a path is refused when it
 // climbs out of it, is a full path, or leads out through a link. A `.evie`
 // that is itself a link is refused as a whole, since where it leads is not
 // the project's, and so is one that is, holds, or is inside evie's data
@@ -47,9 +48,8 @@ export async function listStorage(project: string, folder: string | undefined, d
   if (!kind?.isDirectory()) throw new Error(`There is no folder ${folder} in this project's .evie folder.`)
   const listed: StorageEntry[] = []
   for (const name of await readdir(at)) {
-    if (named === "" && name === OWN_GIT) continue
     const target = await realOrNothing(join(at, name))
-    if (target === undefined || !within(target, evie!)) continue
+    if (target === undefined || !within(target, evie!) || inOwnGit(target, evie!)) continue
     const facts = await stat(target).catch(() => undefined)
     if (!facts || (!facts.isFile() && !facts.isDirectory())) continue
     const path = named === "" ? name : `${named}/${name}`
@@ -81,21 +81,62 @@ export async function readStorage(project: string, path: string, dataFolder: str
   return { ...shown, kind: "text", text }
 }
 
+// What deleting a file or folder of a project's Storage takes, for the
+// owner to see before it goes: a file is one file; a folder is every file
+// and folder in it, however deep. A link counts as one file, since it is
+// the link that goes, never what it leads to.
+export async function countStorage(project: string, path: string, dataFolder: string): Promise<{ files: number; folders: number }> {
+  const at = await deletable(project, path, dataFolder)
+  if (!(await lstat(at)).isDirectory()) return { files: 1, folders: 0 }
+  const counted = { files: 0, folders: 0 }
+  const waiting = [at]
+  for (let folder = waiting.pop(); folder !== undefined; folder = waiting.pop()) {
+    for (const entry of await readdir(folder, { withFileTypes: true })) {
+      if (!entry.isDirectory()) counted.files++
+      else {
+        counted.folders++
+        waiting.push(join(folder, entry.name))
+      }
+    }
+  }
+  return counted
+}
+
+// Deletes a file, or a folder with everything in it, from a project's
+// Storage, for good. A link is deleted itself, never what it leads to.
+export async function deleteStorage(project: string, path: string, dataFolder: string): Promise<void> {
+  await rm(await deletable(project, path, dataFolder), { recursive: true, force: true })
+}
+
+// A file or folder to delete, by its path inside the `.evie/` folder: in
+// the folder that holds it, as that folder really is, once that is sure to
+// be inside the `.evie/` folder. Its own name is not followed, so that a
+// link is the link. The `.evie/` folder itself is refused, and so is its
+// own git repository, however the path reaches it.
+async function deletable(project: string, path: string, dataFolder: string): Promise<string> {
+  const evie = ownEvie(project, dataFolder)
+  const named = inside(path, "file")
+  if (named === "") throw new Error("Storage deletes what is inside this project's .evie folder, never the folder itself.")
+  const cut = named.lastIndexOf("/")
+  const holder = cut === -1 ? evie : await real(evie, named.slice(0, cut), path, "file or folder")
+  if (holder === undefined) throw new Error(`There is no file or folder ${path} in this project's .evie folder.`)
+  const at = join(holder, named.slice(cut + 1))
+  if (inOwnGit(at, evie!)) throw new Error(ownGitRefused(path))
+  if ((await lstat(at).catch(() => undefined)) === undefined) throw new Error(`There is no file or folder ${path} in this project's .evie folder.`)
+  return at
+}
+
 // A file of a project's Storage to give to the page, by its path inside
 // the `.evie/` folder: where it really is, or nothing when it is not there,
 // or is anywhere that `readStorage` refuses, which includes a link into the
 // folder's own git repository. What the file is, and so whether it may be
 // given, is for the one giving it to decide.
 export async function storageFileAt(project: string, path: string, dataFolder: string): Promise<string | undefined> {
-  let at: string
-  let evie: string | undefined
   try {
-    evie = ownEvie(project, dataFolder)
-    at = await real(evie, inside(path, "file"), path, "file")
+    return await real(ownEvie(project, dataFolder), inside(path, "file"), path, "file")
   } catch {
     return undefined
   }
-  return relative(evie!, at).split(sep)[0] === OWN_GIT ? undefined : at
 }
 
 // The project's `.evie/` folder as it really is, or nothing when there is
@@ -151,20 +192,26 @@ function inside(path: string, what: "folder" | "file"): string {
   const plain = relative(ROOT, resolve(ROOT, path))
   if (isAbsolute(path) || plain === ".." || plain.startsWith(`..${sep}`)) throw new Error(`${path} is outside this project's .evie folder. Storage holds only what is inside it.`)
   const names = plain === "" ? [] : plain.split(sep)
-  if (names[0] === OWN_GIT) throw new Error(`${path} is the .evie folder's own git repository, which backs it up, and not one of its files.`)
+  if (names[0] === OWN_GIT) throw new Error(ownGitRefused(path))
   return names.join("/")
 }
+
+// Whether a path, as it really is, is the `.evie/` folder's own git
+// repository or inside it, as one reached through a link to the folder is.
+const inOwnGit = (path: string, evie: string) => relative(evie, path).split(sep)[0] === OWN_GIT
+const ownGitRefused = (path: string) => `${path} is the .evie folder's own git repository, which backs it up, and not one of its files.`
 // Where a path is resolved against to write it plainly: any full path will do.
 const ROOT = resolve("/evie-storage")
 
 // A folder or file named inside the `.evie/` folder, as it really is, once
 // it is sure to be inside it. `evie` is the `.evie/` folder as it really is,
 // or nothing when there is none yet. `given` is the path as it was asked for.
-async function real(evie: string | undefined, named: string, given: string, what: "folder" | "file"): Promise<string> {
+async function real(evie: string | undefined, named: string, given: string, what: "folder" | "file" | "file or folder"): Promise<string> {
   if (evie === undefined) throw new Error(`There is no ${what} ${given} in this project's .evie folder.`)
   const target = await realOrNothing(join(evie, named))
   if (target === undefined) throw new Error(`There is no ${what} ${given} in this project's .evie folder.`)
   if (!within(target, evie)) throw new Error(`${given} is outside this project's .evie folder. Storage holds only what is inside it.`)
+  if (inOwnGit(target, evie)) throw new Error(ownGitRefused(given))
   return target
 }
 
