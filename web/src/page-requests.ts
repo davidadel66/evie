@@ -1,15 +1,14 @@
-import { select } from "./selection.ts"
-import { newChat } from "./workspace.ts"
+import { newSessionAddress } from "./address.ts"
 
 // What the command palette and the shortcuts ask of a part of the page
-// that keeps its own state: the session list to start a new session where
-// it would, or to move to the session above or below; the message box to
+// that keeps its own state: the session list to move to the session above
+// or below; the message box to
 // open its model picker; and the header over the conversation to rename
 // its session. Each part listens while it is
 // on the page; a request no part is listening for does nothing, and `ask`
 // says so.
 
-export type PageRequest = "new session" | "previous session" | "next session" | "pick model" | "rename"
+export type PageRequest = "previous session" | "next session" | "pick model" | "rename"
 
 const listening = new Map<PageRequest, Set<() => void>>()
 
@@ -35,12 +34,7 @@ export function windowOver(): "palette" | "other" | undefined {
   return undefined
 }
 
-// A new session, wherever the owner is: in a workspace, a new one in its
-// side chat, in its project, with the side chat shown; in the session view,
-// where the list's New session would make one, or with no list, a draft
-// with no project.
+// A new session, wherever the owner is.
 export function newSession() {
-  const chat = newChat(location.hash)
-  if (chat !== undefined) location.hash = chat
-  else if (!ask("new session")) select({ draft: null })
+  location.hash = newSessionAddress(location.hash)
 }

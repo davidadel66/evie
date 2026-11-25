@@ -68,10 +68,10 @@ export function deletedSelection(selected: Selected | undefined, deleted: readon
   return deleted.includes(selected.session) ? selected.session : undefined
 }
 
-// The project being looked at, which a new session starts in: the
-// selected draft's or session's, or with nothing selected, the latest
-// active session's, as T3 Code starts a new thread in the project used
-// last, or none. A session not in the list is taken to have none.
+// The project being looked at, whose workspace the Workspaces button
+// opens: the selected draft's or session's, or with nothing selected, the
+// latest active session's, or none. A session not in the list is taken to
+// have none. A new session does not start in it: it starts with no project.
 export function projectLookedAt(selected: Selected | undefined, sessions: readonly SessionSummary[]): string | null {
   if (selected === undefined) return latest(sessions)?.project ?? null
   if ("draft" in selected) return selected.draft

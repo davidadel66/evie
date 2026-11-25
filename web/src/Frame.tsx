@@ -19,7 +19,7 @@ import { CaretDown, GearSix, SidebarRight } from "./icons.tsx"
 import { NoProjectTile, ProjectGlyph, ProjectTile } from "./ProjectIcon.tsx"
 import { Palette, RightPanel, SCREENS, SettingsPage, WorkspaceView } from "./screens.ts"
 import { openSettings, select, useAddress, useSelected, useWorkspacePlace } from "./selection.ts"
-import { projectLookedAt, titleOf } from "./session-list.ts"
+import { titleOf } from "./session-list.ts"
 import { ListButton, ListTop, SessionList } from "./SessionList.tsx"
 import { HeaderName } from "./SessionRow.tsx"
 import type { Sessions } from "./sessions.ts"
@@ -192,22 +192,15 @@ function useFrameShortcuts(togglePalette: () => void) {
 // The middle column: the selected session's conversation, under its
 // project and name, or one of its subagents', or for a draft, the new
 // session that will start, in the project its header picks. With nothing
-// open, the page is a draft in the project of the latest session, as T3
-// Code opens one, fixed as the empty page first shows, so that another
-// session becoming the latest neither moves it nor loses what is typed.
+// open, the page is a draft with no project.
 // Whatever it shows, its header has the button that shows and hides the
 // session details.
 function OpenSession({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   const selected = useSelected()
   const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
-  const empty = useRef<{ project: string | null }>(undefined)
-  if (selected !== undefined) empty.current = undefined
-  else if (list.listed) empty.current ??= { project: projectLookedAt(undefined, list.sessions) }
   if (selected === undefined || "draft" in selected) {
-    // With nothing open, which project is not known until the list is read.
-    if (empty.current === undefined && selected === undefined) return <Top />
-    const project = selected === undefined ? empty.current!.project : selected.draft
+    const project = selected === undefined ? null : selected.draft
     return (
       <>
         <Top project={{ id: project, listed: projectOf(project) }} title="New session" pick={{ projects: list.projects, choose: (to) => select({ draft: to }) }} />

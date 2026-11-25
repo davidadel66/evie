@@ -12,13 +12,14 @@ import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Connection } from "./connection.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
 import type { Sessions } from "./sessions.ts"
-import { ask, whenAsked, windowOver } from "./page-requests.ts"
+import { ask, newSession, whenAsked, windowOver } from "./page-requests.ts"
 import { label as keyLabel, onMac, pressed } from "./shortcuts.ts"
 import { addressOfWorkspace } from "./workspace.ts"
 
 // The top of the session list, one row in the list's header: evie's name,
 // filling the room, then the Workspaces button, which opens the workspace
-// view, the New session button, and the settings button given. Workspaces
+// view, the New session button, which starts a draft with no project, and
+// the settings button given. Workspaces
 // opens the workspace of the project being looked at, or with no project at
 // all, the New workspace dialog; until the projects have been listed, which
 // it is not yet known, it waits.
@@ -27,7 +28,6 @@ export function ListTop({ connection, sessions, settings }: { connection: Connec
   const selected = useSelected()
   const lookingAt = projectLookedAt(selected, list.sessions)
   const workspace = workspaceToOpen(lookingAt, list.sessions, list.projects)
-  const where = lookingAt === null ? "with no project" : `in ${list.projects.find((project) => project.id === lookingAt)?.name ?? "its project"}`
   const icon = cn(buttonVariants({ variant: "icon" }))
   return (
     <header className="flex h-header-height shrink-0 items-center gap-0.5 pl-row-inset">
@@ -47,7 +47,7 @@ export function ListTop({ connection, sessions, settings }: { connection: Connec
           </Button>
         </NewWorkspace>
       )}
-      <Button variant="icon" aria-label="New session" title={`New session ${where} (${keyLabel("new session", onMac())})`} onClick={() => select({ draft: lookingAt })}>
+      <Button variant="icon" aria-label="New session" title={`New session (${keyLabel("new session", onMac())})`} onClick={newSession}>
         <PencilSimpleLine />
       </Button>
       {settings}
@@ -80,7 +80,6 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
 
   const selectedSession = selected !== undefined && "session" in selected ? selected.session : undefined
   const startingIn = selectedSession !== undefined && !list.sessions.some((each) => each.session === selectedSession) ? startedHere(selectedSession) : undefined
-  const lookingAt = projectLookedAt(selected, list.sessions)
   const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
 
   function setGroups(next: OpenGroups) {
@@ -153,12 +152,10 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   const groups = groupSessions(filterSessions(list.sessions, search, projectName))
 
   // The session above or below the selected one, by its shortcut or from
-  // the palette, as T3 Code moves through its threads; and a new session
-  // where New session makes one, which the page asks for.
+  // the palette, as T3 Code moves through its threads.
   const order = inListOrder(groups, open)
-  const startNew = () => select({ draft: lookingAt })
-  const moves = useRef({ order, startNew })
-  moves.current = { order, startNew }
+  const moves = useRef({ order })
+  moves.current = { order }
   useEffect(() => {
     const mac = onMac()
     // As the address has it now, which a key pressed straight after
@@ -176,7 +173,6 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
     }
     addEventListener("keydown", onKey)
     const stops = [
-      whenAsked("new session", () => moves.current.startNew()),
       whenAsked("previous session", () => step("previous")),
       whenAsked("next session", () => step("next")),
     ]
