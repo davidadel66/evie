@@ -55,17 +55,21 @@ export function openDashboards(connection: Connection, project: string): Dashboa
   }
 }
 
+// What opening a live dashboard gives the page: what the server answered,
+// or that the server could not be reached.
+export type LiveOpened = DashboardOpened | { status: "unreachable"; message: string }
+
 // Opens a live dashboard through the server, with this browser's sign-in
 // cookie: its app is started if need be, and the page is given the address
 // its frame reaches it at. Asked again while the tab is open, it keeps the
 // app running and the address working.
-export async function openLive(project: string, id: string): Promise<DashboardOpened> {
+export async function openLive(project: string, id: string): Promise<LiveOpened> {
   try {
     const answer = await fetch(`/dashboard?${new URLSearchParams({ project, id })}`, { method: "POST" })
     if (!answer.ok) return { status: "failed", message: (await answer.text()) || `evie's server answered ${answer.status}.` }
     return (await answer.json()) as DashboardOpened
   } catch (cause) {
-    return { status: "failed", message: `evie's server could not be reached: ${cause instanceof Error ? cause.message : String(cause)}` }
+    return { status: "unreachable", message: `evie's server could not be reached: ${cause instanceof Error ? cause.message : String(cause)}` }
   }
 }
 
@@ -75,10 +79,13 @@ export async function openLive(project: string, id: string): Promise<DashboardOp
 export type LiveShown = { status: "opening" } | { status: "ready"; url: string; load: number } | Exclude<DashboardOpened, { status: "ready" }>
 
 // What the tab shows once the dashboard has been opened, or asked for again.
-// The page stays as it is while its app keeps running. It is loaded again
-// when its app had to be started again, as after it crashed or was stopped
-// to make room for another, since the page drawn is of the app that stopped.
-export function afterOpening(shown: LiveShown, opened: DashboardOpened): LiveShown {
+// The page stays as it is while its app keeps running, and while evie's
+// server cannot be reached for a moment, since the page may still work. It
+// is loaded again when its app had to be started again, as after it crashed
+// or was stopped to make room for another, since the page drawn is of the
+// app that stopped.
+export function afterOpening(shown: LiveShown, opened: LiveOpened): LiveShown {
+  if (opened.status === "unreachable") return shown.status === "ready" ? shown : { status: "failed", message: opened.message }
   if (opened.status !== "ready") return opened
   if (shown.status !== "ready") return { status: "ready", url: opened.url, load: 0 }
   if (!opened.started && opened.url === shown.url) return shown

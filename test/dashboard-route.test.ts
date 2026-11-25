@@ -129,11 +129,21 @@ test("a compressed page from the app reaches the browser as one it can read", as
   expect(await answer.text()).toBe(html)
 })
 
-test("a cookie the app sets is not passed back, since it would be Evie's own address's", async () => {
-  const url = runningApp(() => new Response("ok", { headers: { "Set-Cookie": "evie_token_3843=forged; Path=/" } }))
+test("a cookie the app sets, or a wipe of the site's data, is not passed back, since either would be Evie's own address's", async () => {
+  const url = runningApp(() => new Response("ok", { headers: { "Set-Cookie": "evie_token_3843=forged; Path=/", "Clear-Site-Data": '"cookies", "storage"' } }))
   const { open, page } = await serveDashboards([{ name: "Cookies", url }])
   const answer = await page(ready((await open("cookies")).opened).url)
   expect(answer.headers.get("set-cookie")).toBeNull()
+  expect(answer.headers.get("clear-site-data")).toBeNull()
+})
+
+test("a dashboard whose address names a page and a query opens on that page, and its files are beside it", async () => {
+  const url = runningApp((request) => new Response(`at ${new URL(request.url).pathname}${new URL(request.url).search}`))
+  const { open, page } = await serveDashboards([{ name: "Notebook", url: `${url}/app/index.html?token=abc` }])
+  const at = ready((await open("notebook")).opened).url
+  expect(at).toMatch(/^\/dashboard\/[\w-]{43}\/index\.html\?token=abc$/)
+  expect(await (await page(at)).text()).toBe("at /app/index.html?token=abc")
+  expect(await (await page(at.replace(/index\.html.*$/, "style.css"))).text()).toBe("at /app/style.css")
 })
 
 test("every answer is sandboxed, so a page the app serves runs as no site even when opened on its own", async () => {

@@ -1,12 +1,14 @@
 import { mkdirSync, writeFileSync } from "node:fs"
+import { connect } from "node:net"
 import { join, resolve } from "node:path"
 import { endOf, startCommand, type Ended, type Running } from "./processes.ts"
 
 // Runs the apps behind a workspace's live dashboards. An app is started from
 // its dashboard's `start` command, in its project's folder, when its tab
 // asks for it, and runs as a shell command does, in a process group of its
-// own, so stopping it stops all it started. An app already answering at its
-// address is used as it is and never stopped. An app Evie started is
+// own, so stopping it stops all it started. An app answers while something
+// listens on its address's port. One already answering is used as it is
+// and never stopped. An app Evie started is
 // stopped once no tab has asked for it in `idleMinutes`, and at most
 // `mostRunning` run at once: starting another stops the one asked for
 // longest ago. All are stopped when Evie stops.
@@ -41,9 +43,14 @@ const IDLE_MINUTES = 10
 const MOST_RUNNING = 3
 // How long a started app has to answer before it is stopped as broken.
 const START_WITHIN = 20_000
-// How often a starting app is asked whether it answers yet, and how long it has to answer each time.
+// How often a starting app is looked at to tell whether it answers yet,
+// and how long its port has to take the connection each time.
 const ASK_EVERY = 150
 const ANSWER_WITHIN = 1500
+// How long a started app that has stopped answering, while something it
+// started runs on, has to answer again, as while its watcher restarts its
+// server, before it is stopped and started afresh.
+const BACK_WITHIN = 2000
 // How much of what a failed app printed is shown.
 const LOG_SHOWN = 4000
 
@@ -56,8 +63,8 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
   // The apps started and still running, by folder and start command, the
   // one asked for longest ago first.
   const started = new Map<string, Started>()
-  // Starts under way, so that tabs asking at once start an app once.
-  const starting = new Map<string, Promise<EnsureResult>>()
+  // Looks at an app under way, so that tabs asking at once start it once.
+  const looking = new Map<string, Promise<EnsureResult>>()
 
   function asked(key: string, app: Started) {
     started.delete(key)
@@ -76,28 +83,32 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
 
   async function ensure(app: LiveApp, signal: AbortSignal): Promise<EnsureResult> {
     if (signal.aborted) return STOPPING
-    const key = app.start === undefined ? undefined : `${resolve(app.folder)}\0${app.start}`
-    const already = () => {
-      if (key === undefined) return undefined
-      const pending = starting.get(key)
-      if (pending !== undefined) return pending
-      const mine = started.get(key)
-      if (mine === undefined) return undefined
-      asked(key, mine)
-      return { ok: true as const, started: false }
-    }
-    const before = already()
-    if (before !== undefined) return before
-    if (await answersAt(app.url, signal)) return { ok: true, started: false }
-    if (key === undefined || app.start === undefined) {
+    if (app.start === undefined) {
+      if (await answersAt(app.url)) return { ok: true, started: false }
       return { ok: false, status: "not_running", message: `Nothing answers at ${app.url}, and the dashboard has no start command to start it with.` }
     }
-    // Another tab may have started it while this one asked.
-    const meanwhile = already()
-    if (meanwhile !== undefined) return meanwhile
-    const start = startApp(app, app.start, key, signal).finally(() => starting.delete(key))
-    starting.set(key, start)
-    return start
+    const key = `${resolve(app.folder)}\0${app.start}`
+    const pending = looking.get(key)
+    if (pending !== undefined) return pending
+    const look = lookAt(app, app.start, key, signal).finally(() => looking.delete(key))
+    looking.set(key, look)
+    return look
+  }
+
+  async function lookAt(app: LiveApp, command: string, key: string, signal: AbortSignal): Promise<EnsureResult> {
+    const mine = started.get(key)
+    if (mine !== undefined) {
+      if (await answersWithin(app.url, BACK_WITHIN, signal, () => mine.ended !== undefined)) {
+        asked(key, mine)
+        return { ok: true, started: false }
+      }
+      // Its server has stopped, though something it started may run on.
+      await stop(key, mine)
+    } else if (await answersAt(app.url)) {
+      return { ok: true, started: false }
+    }
+    if (signal.aborted) return STOPPING
+    return startApp(app, command, key, signal)
   }
 
   async function startApp(app: LiveApp, command: string, key: string, signal: AbortSignal): Promise<EnsureResult> {
@@ -131,21 +142,15 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
       const { text } = endOf(logFile, LOG_SHOWN)
       return text.trim() === "" ? {} : { log: text }
     }
-    const until = Date.now() + startWithin
-    while (!signal.aborted) {
-      if (await answersAt(app.url, signal)) return { ok: true, started: true }
-      if (mine.ended !== undefined) {
-        const how = mine.ended.signal ? `it was ended by ${mine.ended.signal}` : `exit status ${mine.ended.status}`
-        return { ok: false, status: "failed", message: `Its start command stopped before anything answered at ${app.url} (${how}).`, ...printed() }
-      }
-      if (Date.now() >= until) {
-        await stop(key, mine)
-        return { ok: false, status: "failed", message: `Nothing answered at ${app.url} within ${startWithin / 1000} seconds of starting it, so it was stopped.`, ...printed() }
-      }
-      await sleep(ASK_EVERY, signal)
-    }
+    if (await answersWithin(app.url, startWithin, signal, () => mine.ended !== undefined)) return { ok: true, started: true }
+    const ended = mine.ended
     await stop(key, mine)
-    return STOPPING
+    if (signal.aborted) return STOPPING
+    if (ended !== undefined) {
+      const how = ended.signal ? `it was ended by ${ended.signal}` : `exit status ${ended.status}`
+      return { ok: false, status: "failed", message: `Its start command stopped before anything answered at ${app.url} (${how}).`, ...printed() }
+    }
+    return { ok: false, status: "failed", message: `Nothing answered at ${app.url} within ${startWithin / 1000} seconds of starting it, so it was stopped.`, ...printed() }
   }
 
   return {
@@ -158,15 +163,35 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
 
 const STOPPING: EnsureResult = { ok: false, status: "failed", message: "Evie is stopping, so it starts no dashboards." }
 
-// Whether anything answers at an address: any answer at all means a server is listening.
-async function answersAt(url: string, signal: AbortSignal): Promise<boolean> {
-  try {
-    const answer = await fetch(url, { redirect: "manual", signal: AbortSignal.any([signal, AbortSignal.timeout(ANSWER_WITHIN)]) })
-    await answer.body?.cancel()
-    return true
-  } catch {
-    return false
+// Whether something listens on an address's port. Its port is only
+// connected to, so the app is sent no request, and one busy with a slow
+// page still answers.
+function answersAt(url: string): Promise<boolean> {
+  const at = new URL(url)
+  const port = Number(at.port) || (at.protocol === "https:" ? 443 : 80)
+  return new Promise((done) => {
+    const socket = connect({ host: at.hostname.replace(/^\[(.*)\]$/, "$1"), port })
+    const end = (answers: boolean) => {
+      clearTimeout(clock)
+      socket.destroy()
+      done(answers)
+    }
+    const clock = setTimeout(() => end(false), ANSWER_WITHIN)
+    socket.once("connect", () => end(true))
+    socket.once("error", () => end(false))
+  })
+}
+
+// Whether an address answers within `within` milliseconds, looking again
+// until then, unless Evie stops or `over` says there is no use waiting.
+async function answersWithin(url: string, within: number, signal: AbortSignal, over: () => boolean): Promise<boolean> {
+  const until = Date.now() + within
+  while (!signal.aborted) {
+    if (await answersAt(url)) return true
+    if (over() || Date.now() >= until) return false
+    await sleep(ASK_EVERY, signal)
   }
+  return false
 }
 
 function sleep(ms: number, signal: AbortSignal): Promise<void> {

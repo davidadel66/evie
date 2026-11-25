@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, readFile, realpath, rm } from "node:fs/promises"
+import { mkdtemp, readdir, readFile, realpath, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createDashboardRunner, type DashboardRunnerOptions, type LiveApp } from "../src/core/dashboard-runner.ts"
@@ -20,7 +20,8 @@ async function tempFolder(prefix: string): Promise<string> {
 // A runner with its own log folder, closed after the test, and an app for
 // it in a folder of its own.
 async function setUp(options: Partial<DashboardRunnerOptions> = {}) {
-  const runner = createDashboardRunner({ logFolder: await tempFolder("evie-dashboard-logs-"), ...options })
+  const logFolder = join(await tempFolder("evie-dashboard-logs-"), "logs")
+  const runner = createDashboardRunner({ logFolder, ...options })
   cleanups.push(() => runner.close())
   const folder = await tempFolder("evie-dashboard-app-")
   const app = (dashboard: string, start?: string | ((port: number) => string)): LiveApp & { port: number } => {
@@ -34,7 +35,7 @@ async function setUp(options: Partial<DashboardRunnerOptions> = {}) {
       ...(start !== undefined && { start: typeof start === "string" ? start : start(port) }),
     }
   }
-  return { runner, folder, app }
+  return { runner, folder, app, logFolder }
 }
 
 const running = new AbortController().signal
@@ -178,4 +179,37 @@ test("Evie stopping ends a start that is under way, and no app is started after"
   const opened = await opening
   expect(opened).toEqual({ ok: false, status: "failed", message: expect.stringContaining("stopping") })
   expect(await runner.ensure(late, stopping.signal)).toEqual({ ok: false, status: "failed", message: expect.stringContaining("stopping") })
+})
+
+test("an app whose server stopped, while something its start command started runs on, is started again", async () => {
+  const { runner, folder, app } = await setUp()
+  const pidFile = join(folder, "pid")
+  const watched = app("watched", (port) => `sleep 30 & echo $$ > ${JSON.stringify(pidFile)}; exec ${appCommand(port)}`)
+  expect(await runner.ensure(watched, running)).toEqual({ ok: true, started: true })
+
+  process.kill(Number((await readFile(pidFile, "utf8")).trim()), "SIGKILL")
+  expect(await untilDown(watched.url)).toBe(true)
+  expect(await runner.ensure(watched, running)).toEqual({ ok: true, started: true })
+  expect(await answers(watched.url)).toBe(true)
+})
+
+test("an app briefly not listening, as while its watcher restarts it, is left as it is", async () => {
+  const { runner, folder, app } = await setUp()
+  const pidFile = join(folder, "pid")
+  const restarts = app("restarts", (port) => `while :; do ${appCommand(port)} & echo $! > ${JSON.stringify(pidFile)}; wait $!; sleep 0.3; done`)
+  expect(await runner.ensure(restarts, running)).toEqual({ ok: true, started: true })
+
+  process.kill(Number((await readFile(pidFile, "utf8")).trim()), "SIGKILL")
+  expect(await untilDown(restarts.url)).toBe(true)
+  expect(await runner.ensure(restarts, running)).toEqual({ ok: true, started: false })
+})
+
+test("Evie stopping while an app is first looked at does not run its start command", async () => {
+  const { runner, app, logFolder } = await setUp()
+  const stopping = new AbortController()
+  const opening = runner.ensure(app("never", (port) => appCommand(port)), stopping.signal)
+  stopping.abort()
+  expect(await opening).toEqual({ ok: false, status: "failed", message: expect.stringContaining("stopping") })
+  // Starting it would have made its log file.
+  expect(await readdir(logFolder).catch(() => [])).toEqual([])
 })

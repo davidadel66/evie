@@ -540,14 +540,20 @@ function checkSettings(parsed: unknown, file: string): SettingsFile {
   return settings as SettingsFile
 }
 
+// The longest a live dashboard's app may go unused: a week. A minute is
+// the shortest, since an open tab asks for its app every 30 seconds.
+const MOST_IDLE_MINUTES = 7 * 24 * 60
+
 function checkLiveDashboards(value: unknown, file: string): void {
   if (value === undefined) return
   const wrong = (): never => {
-    throw new Error(`In ${file}, "liveDashboards" must be { "idleMinutes": <minutes above zero>, "mostRunning": <a whole number above zero> }, either one left out for its default.`)
+    throw new Error(
+      `In ${file}, "liveDashboards" must be { "idleMinutes": <whole minutes, from 1 to ${MOST_IDLE_MINUTES}>, "mostRunning": <a whole number above zero> }, either one left out for its default.`,
+    )
   }
   if (typeof value !== "object" || value === null || Array.isArray(value)) return wrong()
   const { idleMinutes, mostRunning } = value as Record<string, unknown>
-  if (idleMinutes !== undefined && !(typeof idleMinutes === "number" && Number.isFinite(idleMinutes) && idleMinutes > 0)) wrong()
+  if (idleMinutes !== undefined && !(Number.isInteger(idleMinutes) && (idleMinutes as number) >= 1 && (idleMinutes as number) <= MOST_IDLE_MINUTES)) wrong()
   if (mostRunning !== undefined && !(Number.isInteger(mostRunning) && (mostRunning as number) > 0)) wrong()
 }
 

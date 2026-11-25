@@ -123,8 +123,12 @@ test("how long a live dashboard's app may go unused, and how many run at once, a
   await writeFile(join(home, "evie.json"), JSON.stringify({ liveDashboards: { idleMinutes: 30, mostRunning: 5 } }))
   expect((await loadSettingsFiles({ env: { EVIE_HOME: home } })).liveDashboards).toEqual({ idleMinutes: 30, mostRunning: 5 })
 
-  await writeFile(join(home, "evie.json"), JSON.stringify({ liveDashboards: { mostRunning: 0 } }))
-  await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow('"liveDashboards" must be')
+  // A time shorter than the 30 seconds between a tab's asks would stop an
+  // open dashboard's app; one past a week is too long for a timer.
+  for (const wrong of [{ mostRunning: 0 }, { mostRunning: 1.5 }, { idleMinutes: 0.25 }, { idleMinutes: 50_000 }]) {
+    await writeFile(join(home, "evie.json"), JSON.stringify({ liveDashboards: wrong }))
+    await expect(loadSettingsFiles({ env: { EVIE_HOME: home } })).rejects.toThrow('"liveDashboards" must be')
+  }
 })
 
 test("a page lists a workspace's dashboards over its connection, and a broken settings file is a failure that says why", async () => {

@@ -68,4 +68,7 @@ test("a live dashboard's page stays as it is while its app runs, and is loaded a
   expect(afterOpening(shown, { status: "ready", url: "/dashboard/other/", started: false })).toEqual({ status: "ready", url: "/dashboard/other/", load: 1 })
   // Its app could not be started again.
   expect(afterOpening(shown, { status: "failed", message: "It stopped." })).toEqual({ status: "failed", message: "It stopped." })
+  // evie's server could not be reached for a moment: the page drawn may still work.
+  expect(afterOpening(shown, { status: "unreachable", message: "evie's server could not be reached." })).toBe(shown)
+  expect(afterOpening(opening, { status: "unreachable", message: "evie's server could not be reached." })).toEqual({ status: "failed", message: "evie's server could not be reached." })
 })

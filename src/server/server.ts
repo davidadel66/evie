@@ -5,7 +5,7 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 import { ATTACHMENT_LIMIT, type Attachments, type Command, type Commands, type Evie, type EvieEvent, type LiveDashboards, type StorageFiles } from "../core/types.ts"
 import { keptFileAt, typeOfFile } from "../plugins/show/files.ts"
 import { companionType } from "../plugins/show/kinds.ts"
-import { forward } from "./dashboard-proxy.ts"
+import { firstPage, forward } from "./dashboard-proxy.ts"
 import { OWN_NAME, type Tokens } from "./tokens.ts"
 import { shikiAddress, shikiRoute } from "./shiki-files.ts"
 import { fileRoute } from "./variants.ts"
@@ -571,8 +571,9 @@ export function startServer(options: ServerOptions): EvieServer {
 
   // Opens a workspace's live dashboard for a signed-in page, starting its
   // app if need be, and gives the address its sandboxed frame reaches it at:
-  // `/dashboard/<pass>/`. Asked again while the tab is open, it keeps the
-  // app running and gives the same pass, working for longer.
+  // `/dashboard/<pass>/`, then the page it opens on. Asked again while the
+  // tab is open, it keeps the app running and gives the same pass, working
+  // for longer.
   async function openDashboard(request: Request, port: number): Promise<Response> {
     const admitted = admit(request, port)
     if (admitted instanceof Response) return admitted
@@ -583,7 +584,7 @@ export function startServer(options: ServerOptions): EvieServer {
     const opened = await options.dashboards.open(project, dashboard)
     if (opened.status !== "ready") return Response.json(opened)
     const id = passFor(admitted.token, { kind: "dashboard", reaches: `dashboard:${project}:${dashboard}:${opened.url}`, project, dashboard, upstream: opened.url })
-    return Response.json({ ...opened, url: `${PATHS.dashboard}/${id}/` })
+    return Response.json({ ...opened, url: `${PATHS.dashboard}/${id}/${firstPage(opened.url)}` })
   }
 
   // A request of a live dashboard's page, through its pass, passed on to its

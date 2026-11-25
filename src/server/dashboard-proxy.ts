@@ -1,7 +1,8 @@
 // Passes a request of a live dashboard's page on to its app, on this
 // computer, and its answer back. The page is reached at `<prefix>/…`, which
-// stands for the app's own address, and runs in a sandbox: it has no origin
-// of its own, so it can never read Evie's page or the owner's sign-in.
+// stands for the folder of the app's own address, such as `/app/` for
+// `http://127.0.0.1:3000/app/index.html`, and runs in a sandbox: it has no
+// origin of its own, so it can never read Evie's page or the owner's sign-in.
 
 // Request headers kept from the app: those about this one connection, and
 // the owner's sign-in. The browser's `accept-encoding` is dropped too, since
@@ -10,16 +11,24 @@ const NOT_PASSED_ON = new Set(["host", "connection", "keep-alive", "transfer-enc
 // Answer headers kept from the browser. The body comes back already
 // uncompressed, so its encoding and length no longer hold. A cookie the app
 // sets would be Evie's own address's, where it could stand in for the
-// owner's sign-in. The app's own framing and content rules give way to the sandbox.
-const NOT_PASSED_BACK = new Set(["connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length", "set-cookie", "x-frame-options", "content-security-policy"])
+// owner's sign-in, and a wipe of the site's data would sign the owner out.
+// The app's own framing and content rules give way to the sandbox.
+const NOT_PASSED_BACK = new Set(["connection", "keep-alive", "transfer-encoding", "content-encoding", "content-length", "set-cookie", "clear-site-data", "x-frame-options", "content-security-policy"])
 // The same as the iframe's sandbox, on every answer, so that a page opened
 // on its own, as in a new browser tab, is sandboxed too.
 const SANDBOX = "frame-ancestors 'self'; sandbox allow-scripts allow-forms allow-downloads allow-popups"
 
+// The page a dashboard opens on, from its address, after `<prefix>/`: its
+// file, if it names one, and its query, such as `index.html?token=abc`.
+export function firstPage(upstream: string): string {
+  const { pathname, search } = new URL(upstream)
+  return `${pathname.slice(pathname.lastIndexOf("/") + 1)}${search}`
+}
+
 export async function forward(request: Request, upstream: string, prefix: string): Promise<Response> {
   const asked = new URL(request.url)
   const base = new URL(upstream)
-  const basePath = base.pathname.replace(/\/+$/, "")
+  const basePath = base.pathname.slice(0, base.pathname.lastIndexOf("/"))
   const rest = asked.pathname.slice(prefix.length)
 
   // A sandboxed page has no origin, so a request it sends to the app that

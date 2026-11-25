@@ -23,14 +23,14 @@ export function DashboardView({ project, dashboard }: { project: ListedProject; 
 }
 
 function StaticDashboard({ project, dashboard }: { project: ListedProject; dashboard: Extract<DashboardEntry, { kind: "static" }> }) {
+  // Reload asks for its pass again, since one an hour old has stopped working.
   const preview = usePreviewUrl(addressOf({ project: project.id, path: dashboard.path }))
-  const [load, setLoad] = useState(0)
   return (
-    <Framed status={preview.failed ? "Could not open" : preview.url === undefined ? "Opening…" : "Static"} tone={preview.failed ? "failed" : "quiet"} reload={() => (preview.url === undefined ? preview.remint() : setLoad((n) => n + 1))}>
+    <Framed status={preview.failed ? "Could not open" : preview.url === undefined ? "Opening…" : "Static"} tone={preview.failed ? "failed" : "quiet"} reload={preview.remint}>
       {preview.failed ? (
         <Problem title={`${dashboard.name} could not be opened`} text={`${dashboard.path} could not be opened from this workspace's .evie folder.`} retry={preview.remint} />
       ) : (
-        preview.url === undefined ? <Waiting text={`Opening ${dashboard.name}…`} /> : <Frame key={load} url={preview.url} name={dashboard.name} />
+        preview.url === undefined ? <Waiting text={`Opening ${dashboard.name}…`} /> : <Frame url={preview.url} name={dashboard.name} />
       )}
     </Framed>
   )

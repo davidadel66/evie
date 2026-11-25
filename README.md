@@ -826,7 +826,8 @@ session list or the session details. The page then has three other columns:
   running, and starts it again if it has stopped. An app no tab has asked
   for in 10 minutes is stopped, and at most 3 run at once: starting another
   stops the one asked for longest ago. Both can be changed in the global
-  file, as `{ "liveDashboards": { "idleMinutes": 10, "mostRunning": 3 } }`.
+  file, as `{ "liveDashboards": { "idleMinutes": 10, "mostRunning": 3 } }`,
+  the idle time in whole minutes, up to a week.
   Evie stops the apps it started when it stops; killed instead, it leaves
   them running. The page reaches an app through evie's server, at an
   address of its own for each browser, `/dashboard/<pass>/…`, which stops
