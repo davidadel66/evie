@@ -57,7 +57,7 @@ function LiveDashboard({ project, dashboard }: { project: ListedProject; dashboa
   useEffect(() => {
     if (!ready) return
     let gone = false
-    const ask = () => void openLive(project.id, dashboard.id).then((opened) => !gone && setShown((now) => afterOpening(now, opened)))
+    const ask = () => void openLive(project.id, dashboard.id, "keep").then((opened) => !gone && setShown((now) => afterOpening(now, opened)))
     const clock = setInterval(ask, ASK_AGAIN_EVERY)
     const backInView = () => document.visibilityState === "visible" && ask()
     document.addEventListener("visibilitychange", backInView)
@@ -68,15 +68,21 @@ function LiveDashboard({ project, dashboard }: { project: ListedProject; dashboa
     }
   }, [project.id, dashboard.id, ready])
 
-  const status = shown.status === "ready" ? "Live" : shown.status === "opening" ? `Starting ${dashboard.name}…` : shown.status === "not_running" ? "Not running" : "Could not start"
+  const status = shown.status === "ready" ? "Live" : shown.status === "opening" ? `Starting ${dashboard.name}…` : shown.status === "not_running" ? "Not running" : shown.status === "stopped" ? "Stopped" : "Could not start"
   return (
-    <Framed status={status} tone={shown.status === "ready" ? "live" : shown.status === "opening" ? "starting" : "failed"} reload={reopen}>
+    <Framed status={status} tone={shown.status === "ready" ? "live" : shown.status === "opening" ? "starting" : shown.status === "stopped" ? "quiet" : "failed"} reload={reopen}>
       {shown.status === "ready" ? (
         <Frame key={`${shown.url}#${shown.load}#${opens}`} url={shown.url} name={dashboard.name} />
       ) : shown.status === "opening" ? (
         <Waiting text={`Starting ${dashboard.name}…`} />
       ) : (
-        <Problem title={shown.status === "not_running" ? `${dashboard.name} is not running` : `${dashboard.name} could not start`} text={shown.message} log={shown.log} retry={reopen} />
+        <Problem
+          title={shown.status === "not_running" ? `${dashboard.name} is not running` : shown.status === "stopped" ? `${dashboard.name} was stopped` : `${dashboard.name} could not start`}
+          text={shown.message}
+          log={shown.log}
+          retry={reopen}
+          again={shown.status === "stopped" ? "Start again" : "Try again"}
+        />
       )}
     </Framed>
   )
@@ -118,7 +124,7 @@ function Frame({ url, name }: { url: string; name: string }) {
 
 // Why a dashboard cannot be shown, with the end of what its app printed,
 // and a way to try again when trying again can help.
-function Problem({ title, text, note, log, retry }: { title: string; text: string; note?: string; log?: string | undefined; retry?: () => void }) {
+function Problem({ title, text, note, log, retry, again = "Try again" }: { title: string; text: string; note?: string; log?: string | undefined; retry?: () => void; again?: string }) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-gutter py-8">
       <div className="flex w-full max-w-dialog flex-col gap-3 rounded-md border border-line bg-surface p-5">
@@ -131,7 +137,7 @@ function Problem({ title, text, note, log, retry }: { title: string; text: strin
         {retry !== undefined && (
           <div>
             <Button variant="secondary" onClick={retry}>
-              Try again
+              {again}
             </Button>
           </div>
         )}

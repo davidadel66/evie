@@ -777,15 +777,17 @@ export type DashboardEntry =
 // of what its app printed.
 export type DashboardOpened =
   | { status: "ready"; url: string; started: boolean }
-  | { status: "not_running" | "failed"; message: string; log?: string }
+  | { status: "not_running" | "stopped" | "failed"; message: string; log?: string }
 
 // A workspace's live dashboards, which the server opens for the page and
 // reaches through its proxy.
 export type LiveDashboards = {
-  // Makes sure a live dashboard's app answers, starting it if need be. Its
-  // `url` is the app's own address, on this computer. Asked again while its
-  // tab is open, it keeps the app from being stopped as idle.
-  open(project: string, id: string): Promise<DashboardOpened>
+  // Makes sure a live dashboard's app answers. Its `url` is the app's own
+  // address, on this computer. To "open" it, as its tab does once, starts
+  // its app if need be. To "keep" it, as its open tab does again and again,
+  // keeps the app from being stopped as idle, and starts nothing: an app
+  // that has stopped is said to be "stopped".
+  open(project: string, id: string, how: "open" | "keep"): Promise<DashboardOpened>
   // A live dashboard's address, while its project is trusted and lists it;
   // otherwise undefined. Asked each time the proxy is used.
   address(project: string, id: string): Promise<string | undefined>

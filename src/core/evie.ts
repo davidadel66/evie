@@ -1132,12 +1132,12 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
       },
     },
     dashboards: {
-      async open(projectId, id) {
+      async open(projectId, id, how) {
         const found = await liveDashboard(projectId, id)
         if (found === undefined) return { status: "failed", message: `There is no live dashboard "${id}" in this workspace's .evie/evie.json now.` }
         const { project, entry } = found
         const app = { project: project.id, folder: project.folder, dashboard: entry.id, url: entry.url, ...(entry.start !== undefined && { start: entry.start }) }
-        const opened = await dashboardApps.ensure(app, stopping.signal)
+        const opened = await dashboardApps.ensure(app, stopping.signal, how)
         return opened.ok ? { status: "ready", url: entry.url, started: opened.started } : { status: opened.status, message: opened.message, ...(opened.log !== undefined && { log: opened.log }) }
       },
       async address(projectId, id) {

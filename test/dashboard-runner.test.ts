@@ -265,3 +265,28 @@ test("a record whose process number has passed to another program is dropped, an
   expect(() => process.kill(other.pid!, 0)).not.toThrow()
   expect((await readdir(logFolder)).filter((name) => name.endsWith(".running"))).toEqual([])
 })
+
+test("a tab's ask to keep its app running never starts one, so apps past the most that run do not take turns", async () => {
+  const { runner, app } = await setUp({ mostRunning: 1 })
+  const first = app("first", (port) => appCommand(port))
+  const second = app("second", (port) => appCommand(port))
+  expect(await runner.ensure(first, running)).toEqual({ ok: true, started: true })
+  expect(await runner.ensure(first, running, "keep")).toEqual({ ok: true, started: false })
+
+  // Opening another stops the first to make room.
+  expect(await runner.ensure(second, running)).toEqual({ ok: true, started: true })
+  expect(await untilDown(first.url)).toBe(true)
+  expect(await runner.ensure(first, running, "keep")).toEqual({ ok: false, status: "stopped", message: expect.stringContaining("was stopped") })
+  expect(await answers(second.url)).toBe(true)
+
+  // Opened again, as by Start again, it is started, and it is the other's turn to stop.
+  expect(await runner.ensure(first, running)).toEqual({ ok: true, started: true })
+})
+
+test("an ask to open an app that arrives while an ask to keep it is under way still starts it", async () => {
+  const { runner, app } = await setUp()
+  const asked = app("asked", (port) => appCommand(port))
+  const [kept, opened] = await Promise.all([runner.ensure(asked, running, "keep"), runner.ensure(asked, running)])
+  expect(kept).toMatchObject({ ok: false, status: "stopped" })
+  expect(opened).toEqual({ ok: true, started: true })
+})

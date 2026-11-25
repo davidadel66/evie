@@ -27,9 +27,10 @@ async function serveDashboards(dashboards: unknown, options: { passLasts?: numbe
   cleanups.push(served.stop)
   const project = served.run.project!.id
   const signedIn = { Authorization: `Bearer ${served.token}` }
-  // Opens a dashboard as its tab does, and every 30 seconds while it is open.
-  const open = async (id: string, headers: Record<string, string> = signedIn) => {
-    const answer = await fetch(`${served.server.url}/dashboard?${new URLSearchParams({ project, id })}`, { method: "POST", headers })
+  // Opens a dashboard as its tab does.
+  // With `keep`, it asks as the open tab does every 30 seconds.
+  const open = async (id: string, headers: Record<string, string> = signedIn, keep = false) => {
+    const answer = await fetch(`${served.server.url}/dashboard?${new URLSearchParams({ project, id, ...(keep && { keep: "1" }) })}`, { method: "POST", headers })
     return { status: answer.status, opened: answer.ok ? ((await answer.json()) as DashboardOpened) : undefined }
   }
   const page = (path: string, init?: RequestInit) => fetch(`${served.server.url}${path}`, { redirect: "manual", ...init })
@@ -52,6 +53,16 @@ test("a live dashboard is started when its tab opens it, and its page is reached
   // Evie stopping stops the app it started.
   await served.stop()
   expect(await untilDown(`http://127.0.0.1:${port}/`)).toBe(true)
+})
+
+test("an open tab's ask every 30 seconds keeps its app's pass working, and says the app was stopped instead of starting it", async () => {
+  const port = freePort()
+  const { open, page } = await serveDashboards([{ name: "Cash flow", url: `http://127.0.0.1:${port}/`, start: appCommand(port) }])
+  expect((await open("cash-flow", undefined, true)).opened).toEqual({ status: "stopped", message: expect.stringContaining("was stopped") })
+
+  const opened = ready((await open("cash-flow")).opened)
+  expect((await open("cash-flow", undefined, true)).opened).toEqual({ ...opened, started: false })
+  expect((await page(opened.url)).status).toBe(200)
 })
 
 test("a page that is not signed in cannot open a dashboard", async () => {

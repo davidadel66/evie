@@ -581,7 +581,7 @@ export function startServer(options: ServerOptions): EvieServer {
     const [project, dashboard] = [asked.get("project"), asked.get("id")]
     if (project === null || dashboard === null) return new Response("Name the dashboard, as /dashboard?project=<id>&id=<its id>.", { status: 400 })
     if (!options.dashboards) return new Response("This server opens no dashboards.", { status: 404 })
-    const opened = await options.dashboards.open(project, dashboard)
+    const opened = await options.dashboards.open(project, dashboard, asked.has("keep") ? "keep" : "open")
     if (opened.status !== "ready") return Response.json(opened)
     const id = passFor(admitted.token, { kind: "dashboard", reaches: `dashboard:${project}:${dashboard}:${opened.url}`, project, dashboard, upstream: opened.url })
     return Response.json({ ...opened, url: `${PATHS.dashboard}/${id}/${firstPage(opened.url)}` })

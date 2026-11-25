@@ -61,11 +61,12 @@ export type LiveOpened = DashboardOpened | { status: "unreachable"; message: str
 
 // Opens a live dashboard through the server, with this browser's sign-in
 // cookie: its app is started if need be, and the page is given the address
-// its frame reaches it at. Asked again while the tab is open, it keeps the
-// app running and the address working.
-export async function openLive(project: string, id: string): Promise<LiveOpened> {
+// its frame reaches it at. Asked to "keep" it, as while the tab is open, it
+// keeps the app running and the address working, and starts nothing: an
+// app that has stopped stays so until the dashboard is opened again.
+export async function openLive(project: string, id: string, how: "open" | "keep" = "open"): Promise<LiveOpened> {
   try {
-    const answer = await fetch(`/dashboard?${new URLSearchParams({ project, id })}`, { method: "POST" })
+    const answer = await fetch(`/dashboard?${new URLSearchParams({ project, id, ...(how === "keep" && { keep: "1" }) })}`, { method: "POST" })
     if (!answer.ok) return { status: "failed", message: (await answer.text()) || `evie's server answered ${answer.status}.` }
     return (await answer.json()) as DashboardOpened
   } catch (cause) {
@@ -81,9 +82,9 @@ export type LiveShown = { status: "opening" } | { status: "ready"; url: string; 
 // What the tab shows once the dashboard has been opened, or asked for again.
 // The page stays as it is while its app keeps running, and while evie's
 // server cannot be reached for a moment, since the page may still work. It
-// is loaded again when its app had to be started again, as after it crashed
-// or was stopped to make room for another, since the page drawn is of the
-// app that stopped.
+// is loaded again when its app had to be started again, since the page
+// drawn is of the app that stopped. Once its app has stopped, as to make
+// room for another, the tab says so until it is asked to start it again.
 export function afterOpening(shown: LiveShown, opened: LiveOpened): LiveShown {
   if (opened.status === "unreachable") return shown.status === "ready" ? shown : { status: "failed", message: opened.message }
   if (opened.status !== "ready") return opened

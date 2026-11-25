@@ -823,7 +823,9 @@ session list or the session details. The page then has three other columns:
   A live dashboard's app is started, in the project's folder, when its tab
   opens; one already answering at its address is used as it is and never
   stopped. The open tab asks for it again every 30 seconds, which keeps it
-  running, and starts it again if it has stopped. An app no tab has asked
+  running and never starts it: an app that has stopped, as to make room
+  for another, stays stopped, and its tab says so, with **Start again**.
+  An app no tab has asked
   for in 10 minutes is stopped, and at most 3 run at once: starting another
   stops the one asked for longest ago. Both can be changed in the global
   file, as `{ "liveDashboards": { "idleMinutes": 10, "mostRunning": 3 } }`,

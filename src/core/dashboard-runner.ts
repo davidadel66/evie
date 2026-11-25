@@ -11,7 +11,10 @@ import { endOf, pickUp, sameCommand, startCommand, startOf, type Ended, type Run
 // and never stopped. An app Evie started is
 // stopped once no tab has asked for it in `idleMinutes`, and at most
 // `mostRunning` run at once: starting another stops the one asked for
-// longest ago. All are stopped when Evie stops. Each one running has a
+// longest ago. Only a tab opening its dashboard starts an app: the asks
+// an open tab repeats keep its app running, and never start one, or tabs
+// open on more apps than may run would stop each other's in turn. All are
+// stopped when Evie stops. Each one running has a
 // small record beside its output, so that when Evie was killed instead, the
 // next run picks its apps up again as its own, and none is left running
 // with no one to stop it.
@@ -33,12 +36,13 @@ export type LiveApp = { project: string; folder: string; dashboard: string; url:
 // it; otherwise why not, with the end of what it printed.
 export type EnsureResult =
   | { ok: true; started: boolean }
-  | { ok: false; status: "not_running" | "failed"; message: string; log?: string }
+  | { ok: false; status: "not_running" | "stopped" | "failed"; message: string; log?: string }
 
 export type DashboardRunner = {
-  // Makes sure an app answers, starting it if it has a start command, and
-  // counts as the tab asking for it, which keeps it from being stopped as idle.
-  ensure(app: LiveApp, signal: AbortSignal): Promise<EnsureResult>
+  // Makes sure an app answers, and counts as the tab asking for it, which
+  // keeps it from being stopped as idle. To "open" it starts it if it has a
+  // start command; to "keep" it only says that it has stopped.
+  ensure(app: LiveApp, signal: AbortSignal, how?: "open" | "keep"): Promise<EnsureResult>
   // Stops every app it started.
   close(): Promise<void>
 }
@@ -58,6 +62,7 @@ const BACK_WITHIN = 2000
 // How much of what a failed app printed is shown.
 const LOG_SHOWN = 4000
 
+type Look = { result: Promise<EnsureResult>; how: "open" | "keep" }
 type Started = { running: Running; ended?: Ended; idle?: ReturnType<typeof setTimeout> }
 
 export function createDashboardRunner(options: DashboardRunnerOptions): DashboardRunner {
@@ -68,7 +73,7 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
   // one asked for longest ago first.
   const started = new Map<string, Started>()
   // Looks at an app under way, so that tabs asking at once start it once.
-  const looking = new Map<string, Promise<EnsureResult>>()
+  const looking = new Map<string, Look>()
 
   function asked(key: string, app: Started) {
     started.delete(key)
@@ -111,7 +116,7 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
     return app.running.ended
   }
 
-  async function ensure(app: LiveApp, signal: AbortSignal): Promise<EnsureResult> {
+  async function ensure(app: LiveApp, signal: AbortSignal, how: "open" | "keep" = "open"): Promise<EnsureResult> {
     if (signal.aborted) return STOPPING
     if (app.start === undefined) {
       if (await answersAt(app.url)) return { ok: true, started: false }
@@ -119,13 +124,18 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
     }
     const key = `${resolve(app.folder)}\0${app.start}`
     const pending = looking.get(key)
-    if (pending !== undefined) return pending
-    const look = lookAt(app, app.start, key, signal).finally(() => looking.delete(key))
-    looking.set(key, look)
-    return look
+    if (pending !== undefined) {
+      // An ask to open is not answered by a look that starts nothing.
+      if (pending.how === "open" || how === "keep") return pending.result
+      await pending.result
+      return ensure(app, signal, how)
+    }
+    const result = lookAt(app, app.start, key, signal, how).finally(() => looking.delete(key))
+    looking.set(key, { result, how })
+    return result
   }
 
-  async function lookAt(app: LiveApp, command: string, key: string, signal: AbortSignal): Promise<EnsureResult> {
+  async function lookAt(app: LiveApp, command: string, key: string, signal: AbortSignal, how: "open" | "keep"): Promise<EnsureResult> {
     const mine = started.get(key)
     if (mine !== undefined) {
       if (await answersWithin(app.url, BACK_WITHIN, signal, () => mine.ended !== undefined)) {
@@ -138,6 +148,7 @@ export function createDashboardRunner(options: DashboardRunnerOptions): Dashboar
       return { ok: true, started: false }
     }
     if (signal.aborted) return STOPPING
+    if (how === "keep") return { ok: false, status: "stopped", message: "This dashboard's app was stopped. It may have made room for another dashboard, or stopped on its own." }
     return startApp(app, command, key, signal)
   }
 
