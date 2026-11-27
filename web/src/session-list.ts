@@ -3,9 +3,9 @@ import type { Selected } from "./address.ts"
 
 // The session list's rules, apart from its screen.
 
-// The list in its groups: at the top the sessions waiting for the owner,
-// then the active ones; below, the working ones and the settled ones, in
-// groups that open and close. Each is newest first.
+// A project's sessions by their state, as its workspace orders them: those
+// waiting for the owner, then the active ones; the working ones; and the
+// settled ones. Each is newest first.
 export type Groups = { top: SessionSummary[]; working: SessionSummary[]; settled: SessionSummary[] }
 
 export function groupSessions(sessions: readonly SessionSummary[]): Groups {
@@ -13,6 +13,33 @@ export function groupSessions(sessions: readonly SessionSummary[]): Groups {
   const inState = (state: SessionSummary["state"]) => newest.filter((each) => each.state === state)
   return { top: [...inState("needs_you"), ...inState("active")], working: inState("working"), settled: inState("settled") }
 }
+
+// The list in its groups, one for each project and one, General, for the
+// sessions with no project. In a group, the sessions not settled: those
+// waiting for the owner, then the rest, a working one among them, each
+// newest first; and its settled ones, newest first, which one line under
+// them opens.
+export type ProjectGroup = { project: string | null; shown: SessionSummary[]; settled: SessionSummary[] }
+
+// The groups in the list's order: the projects that have sessions, the one
+// active last first; then those of `always` that have none, in the order
+// given, so that a project with no session yet has a title to start one
+// from; and General last, when it has sessions or is one of `always`.
+export function groupByProject(sessions: readonly SessionSummary[], always: readonly (string | null)[]): ProjectGroup[] {
+  const of = new Map<string | null, SessionSummary[]>()
+  for (const session of [...sessions].sort((a, b) => b.lastActive - a.lastActive)) of.set(session.project, [...(of.get(session.project) ?? []), session])
+  // A map keeps the order its keys were first set in: the newest session's project first.
+  for (const project of always) if (!of.has(project)) of.set(project, [])
+  const group = (project: string | null, its: SessionSummary[]): ProjectGroup => {
+    const inState = (state: SessionState) => its.filter((each) => each.state === state)
+    return { project, shown: [...inState("needs_you"), ...its.filter((each) => each.state === "active" || each.state === "working")], settled: inState("settled") }
+  }
+  const groups = [...of].map(([project, its]) => group(project, its))
+  return [...groups.filter((each) => each.project !== null), ...groups.filter((each) => each.project === null)]
+}
+
+// What the sessions with no project are called, as a group and in a search.
+export const GENERAL = "General"
 
 // What a session is called in the list: its name, which is the opening
 // words of its first message until it is named, or for a session with no
@@ -22,7 +49,7 @@ export const titleOf = (session: SessionSummary) => session.name ?? "New session
 // The sessions a search keeps: those whose title and project's name,
 // together, have every word of it in them, in any case, so that a project's
 // name narrows the list to it. `projectName` names a project by its id, or
-// for null "No project", or gives nothing for one not listed yet.
+// for null "General", or gives nothing for one not listed yet.
 export function filterSessions(sessions: readonly SessionSummary[], search: string, projectName: (project: string | null) => string | undefined): SessionSummary[] {
   const words = search.toLowerCase().split(/\s+/).filter((word) => word !== "")
   return sessions.filter((session) => {
@@ -121,48 +148,53 @@ const AGE_UNITS: [string, number][] = [
   ["m", 1],
 ]
 
-// Which of the groups at the bottom are open, as this browser last left
-// them. Working starts open and Settled closed.
-export type OpenGroups = { working: boolean; settled: boolean }
+// The projects whose settled sessions are open, as this browser last left
+// them, each by its key. All start closed.
+export type OpenSettled = readonly string[]
 
-// The groups to have open once the selected session's state has gone from
-// `before` to `after`: a closed group it moved into is opened, so that the
-// session stays in sight, as when the owner settles it. The same groups
-// when it has not moved from one group to another, or moved to the top.
-export function revealMove(open: OpenGroups, before: SessionState | undefined, after: SessionState): OpenGroups {
-  const group = groupOf(after)
-  if (before === undefined || group === groupOf(before) || group === "top" || open[group]) return open
-  return { ...open, [group]: true }
+// A group's key in them: its project's id, or for General, which no id can be, "".
+export const groupKey = (project: string | null) => project ?? ""
+
+// The settled sessions to have open once the selected session, in the group
+// `key`, has gone from `before` to `after`: settled while its group's are
+// closed, as when the owner settles it, they open, so that it stays in
+// sight. The same otherwise, and when it is seen for the first time.
+export function revealSettled(open: OpenSettled, key: string, before: SessionState | undefined, after: SessionState): OpenSettled {
+  if (before === undefined || before === "settled" || after !== "settled" || open.includes(key)) return open
+  return [...open, key]
 }
-const groupOf = (state: SessionState) => (state === "working" || state === "settled" ? state : "top")
+
+// `open` with the group `key` opened if it was closed, and closed if open.
+export const toggleSettled = (open: OpenSettled, key: string): OpenSettled => (open.includes(key) ? open.filter((each) => each !== key) : [...open, key])
 
 // Where this browser keeps them.
-const GROUPS_KEY = "evie.groups"
+const SETTLED_KEY = "evie.settled-open"
 
 // A browser can refuse to keep anything, as in a private window, and then
-// the groups open as they start.
-export function openGroups(): OpenGroups {
+// they all start closed.
+export function openSettled(): OpenSettled {
   try {
-    const kept = JSON.parse(localStorage.getItem(GROUPS_KEY) ?? "{}") as Partial<OpenGroups>
-    return { working: kept.working !== false, settled: kept.settled === true }
+    const kept: unknown = JSON.parse(localStorage.getItem(SETTLED_KEY) ?? "[]")
+    return Array.isArray(kept) ? kept.filter((each): each is string => typeof each === "string") : []
   } catch {
-    return { working: true, settled: false }
+    return []
   }
 }
 
-export function keepOpenGroups(groups: OpenGroups) {
+export function keepOpenSettled(open: OpenSettled) {
   try {
-    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups))
+    localStorage.setItem(SETTLED_KEY, JSON.stringify(open))
   } catch {
-    // Not kept: the next visit opens them as they start.
+    // Not kept: the next visit starts with them closed.
   }
 }
 
-// The sessions shown, in the list's order, by their ids: the top ones,
-// then those of each group that is open. mod+1 to mod+9 jump to the first
-// nine, and the previous and next session are moved to through them.
-export function inListOrder(groups: Groups, open: OpenGroups): string[] {
-  return [...groups.top, ...(open.working ? groups.working : []), ...(open.settled ? groups.settled : [])].map((each) => each.session)
+// The sessions shown, in the list's order, by their ids: each group's that
+// are not settled, then its settled ones when they are open. mod+1 to mod+9
+// jump to the first nine, and the previous and next session are moved to
+// through them.
+export function inListOrder(groups: readonly ProjectGroup[], open: OpenSettled): string[] {
+  return groups.flatMap((group) => [...group.shown, ...(open.includes(groupKey(group.project)) ? group.settled : [])]).map((each) => each.session)
 }
 
 // The session above or below `current` in `order`, as T3 Code moves

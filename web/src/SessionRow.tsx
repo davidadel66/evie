@@ -16,7 +16,7 @@ import {
 import { Check, DotsThree } from "./icons.tsx"
 import { cn } from "./lib/utils.ts"
 import { whenAsked } from "./page-requests.ts"
-import { ProjectGlyph, ProjectName } from "./ProjectIcon.tsx"
+import { ProjectGlyph } from "./ProjectIcon.tsx"
 import { ageWords, nameFieldKey, nameToSave, titleOf } from "./session-list.ts"
 
 // What the owner can do to a session from its row, each giving back why
@@ -37,7 +37,6 @@ export type RowActions = {
 // has moved.
 export function SessionRow({
   session,
-  project,
   projects,
   selected,
   now,
@@ -46,9 +45,6 @@ export function SessionRow({
   refocus,
 }: {
   session: SessionSummary
-  // Undefined for a session with no project, and for a moment for one in a
-  // project made since the projects were listed.
-  project: ListedProject | undefined
   // Every project, for the session to be moved to.
   projects: ListedProject[]
   selected: boolean
@@ -77,8 +73,6 @@ export function SessionRow({
 
   return (
     <Row
-      project={session.project}
-      listed={project}
       title={title}
       branch={session.branch}
       href={addressOf({ session: session.session })}
@@ -107,25 +101,23 @@ export function SessionRow({
   )
 }
 
-// A new session not yet started, in a project or in none: the selected row,
-// at the top of the list, until its first message is sent, on the branch
-// its project is on now, where it will start.
-export function DraftRow({ project, listed, href }: { project: string | null; listed: ListedProject | undefined; href: string }) {
-  return <Row project={project} listed={listed} title="New session" branch={listed?.branch} href={href} selected />
+// A new session not yet started, in a project or in General: the selected
+// row, at the top of its group, until its first message is sent, on the
+// branch its project is on now, where it will start.
+export function DraftRow({ listed, href }: { listed: ListedProject | undefined; href: string }) {
+  return <Row title="New session" branch={listed?.branch} href={href} selected />
 }
 
-// A row in three short lines, one under another: the project's tile and
-// name, or for none an empty tile and "No project", with the state or how
-// long ago the session was active; its title, ending in an ellipsis when
-// cut, and its menu's button in a space of its own; and the session's own
-// branch, the one it last worked on, left out when it has none. The whole
+// A row in two short lines, under its project's title and set in to the
+// project's name: its title, ending in an ellipsis when cut, and its menu's
+// button in a space of its own; and the session's own branch, the one it
+// last worked on, or nothing when it has none, with the state or how long
+// ago the session was active at the line's end. The whole
 // row is the link that selects it, and a double-click on it edits its name,
 // when it has one to edit; while it is edited, a field takes the link's
 // place. The selected row is raised. A note, such as why the server
 // refused, goes on a line under it.
 function Row({
-  project,
-  listed,
   title,
   branch,
   href,
@@ -137,8 +129,6 @@ function Row({
   menu,
   note,
 }: {
-  project: string | null
-  listed: ListedProject | undefined
   title: string
   branch: string | undefined
   href: string
@@ -151,11 +141,7 @@ function Row({
   note?: string | undefined
 }) {
   return (
-    <li className={cn("group relative flex flex-col rounded-md px-row-inset py-2", selected && "bg-surface-raised")}>
-      <span className="flex items-center gap-2 text-caption text-text-muted">
-        <ProjectName project={project} name={listed?.name} />
-        {state}
-      </span>
+    <li className={cn("group relative flex flex-col rounded-md py-1.5 pr-row-inset pl-row-indent", selected && "bg-surface-raised")}>
       <span className="flex items-center">
         {field ?? (
           // Its box covers the whole row, so the row is the link; the menu sits above it.
@@ -178,7 +164,10 @@ function Row({
         )}
         {menu}
       </span>
-      {branch !== undefined && <span className="truncate text-caption text-text-muted">{branch}</span>}
+      <span className="flex items-center gap-2 text-caption text-text-muted">
+        <span className="min-w-0 flex-1 truncate">{branch}</span>
+        {state}
+      </span>
       {note !== undefined && (
         <span role="status" className="pt-1 text-caption text-text-muted">
           {note}

@@ -115,15 +115,3 @@ export function ProjectGlyph({ project }: { project: string }) {
 export function NoProjectTile() {
   return <span aria-hidden="true" className="size-tile-row shrink-0 rounded-tile border border-dashed border-text-muted" />
 }
-
-// A project's small tile and its name, or for none the empty tile and "No
-// project", as a session row's first line shows them, as words of the
-// row: the whole row is the link that opens the session.
-export function ProjectName({ project, name }: { project: string | null; name: string | undefined }) {
-  return (
-    <span className="flex min-w-0 flex-1 items-center gap-2">
-      {project === null ? <NoProjectTile /> : <ProjectIcon project={project} />}
-      <span className="min-w-0 truncate">{project === null ? "No project" : name}</span>
-    </span>
-  )
-}
