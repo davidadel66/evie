@@ -322,28 +322,28 @@ own sign-in.
 The list shows every session you have said something in, kept current as
 they change, and listed again when the line comes back:
 
-- **At the top**, the sessions waiting for an answer from you ("Needs
-  you"), then the other recent ones, newest first. **Working** and
-  **Settled** are groups at the bottom, which open and close; the browser
-  remembers which are open.
-- **Each row** shows its project's icon and name, or for a session in no
-  project an empty dashed tile and "No project", and how long ago it was
-  active, or its state; the session's name; and the session's own git
-  branch: the one its project was on as its latest turn started, which
-  evie records at a turn's start when it has changed. Two sessions of one
-  project can show different branches. A project has a folder in a colour
-  chosen from its id until you pick its icon and colour in its workspace
-  (below).
-- **New session** (the pencil) makes a draft of a new session, at the top
-  of the list, in the project of the selected session or draft, or with
-  nothing open, of the latest session. In a draft, the project in the
-  header is a menu that starts it in another project, or in none, as does
-  the command palette's "New session in a project…". With nothing open,
-  the page is such a draft, in the project of the latest session as the
-  page first showed it. Nothing is made on the server until its first
-  message is sent,
-  so a draft left unused leaves nothing behind. Pressed again, it comes
-  back to the same draft. The first message starts the session, asking
+- **Sessions are grouped under their project.** Each project has a
+  title, its icon and name, and the project active last comes first.
+  **General**, last, holds the sessions in no project, under an empty
+  dashed tile. A project with no session yet still has its title.
+- **Under a title**, the sessions waiting for an answer from you ("Needs
+  you"), then the others, newest first, one that is working marked
+  "Working". Its settled sessions are behind one line, such as "3
+  settled", which opens and closes; the browser remembers which are open.
+- **Each row** shows the session's name, and under it the session's own
+  git branch, with how long ago it was active, or its state: the branch
+  its project was on as its latest turn started, which evie records at a
+  turn's start when it has changed. Two sessions of one project can show
+  different branches. A project has a folder in a colour chosen from its
+  id until you pick its icon and colour in its workspace (below).
+- **The plus on a project's title** makes a draft of a new session in
+  that project, at the top of its group. **New session** (the pencil)
+  makes one in no project, under General, whatever is open. In a draft,
+  the project in the header is a menu that starts it in another project,
+  or in none, as does the command palette's "New session in a project…".
+  With nothing open, the page is a draft in no project. Nothing is made
+  on the server until its first message is sent, so a draft left unused
+  leaves nothing behind. The first message starts the session, asking
   first whether to trust the project when evie needs to know, and the page
   moves to it. A first message that cannot be sent comes back into the
   box, with why.
