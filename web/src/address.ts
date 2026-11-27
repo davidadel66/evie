@@ -1,5 +1,5 @@
 import { settingsPageNamed, type SettingsPage } from "./settings-page.ts"
-import { addressOfWorkspace, chatShown, NEW_CHAT, workspaceIn } from "./workspace.ts"
+import { addressOfWorkspace, chatShown, NEW_CHAT, newChat, workspaceIn } from "./workspace.ts"
 
 // The page's address: what is selected in the list is kept after # in it,
 // so that a reload, a bookmark or a second tab opens on it. That is a
@@ -77,3 +77,9 @@ export function lookedAt(hash: string): { session: string; subagent: boolean } |
   if (selected === undefined) return undefined
   return "draft" in selected ? { draft: true } : { session: selected.session, subagent: selected.subagent !== undefined }
 }
+
+// Where New session goes, from the address's part after #: in a workspace,
+// a new chat in its side chat, in its project, with the side chat shown;
+// in the session view, a draft with no project, whatever is open, which
+// its header can put in a project.
+export const newSessionAddress = (hash: string): string => newChat(hash) ?? addressOf({ draft: null })

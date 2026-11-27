@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
-import { addressAsOpened, addressOf, lookedAt, selectedIn } from "../web/src/address.ts"
+import { addressAsOpened, addressOf, lookedAt, newSessionAddress, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
 import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove, workspaceToOpen } from "../web/src/session-list.ts"
 
@@ -123,7 +123,7 @@ test("as the page opens, it is put at its root with a sign-in code taken out of 
   expect(addressAsOpened("")).toBe("/")
 })
 
-test("the project being looked at is the selected draft's or session's, or with nothing open, the latest active session's, as T3 Code's new thread is, or none, so New session again keeps to the same draft", () => {
+test("the project being looked at is the selected draft's or session's, or with nothing open, the latest active session's, or none", () => {
   const sessions = [summary("general", "active", 2, null), summary("in-p1", "active", 1, "p1")]
 
   expect(projectLookedAt({ draft: "p2" }, sessions)).toBe("p2")
@@ -134,9 +134,10 @@ test("the project being looked at is the selected draft's or session's, or with 
   expect(projectLookedAt(undefined, sessions)).toBe("p1")
   expect(projectLookedAt(undefined, [summary("general", "active", 2, null)])).toBeNull()
   expect(projectLookedAt(undefined, [])).toBeNull()
-  // Pressed again on a draft, New session comes back to the same draft.
-  const draft = { draft: "p2" }
-  expect(addressOf({ draft: projectLookedAt(draft, sessions) })).toBe(addressOf(draft))
+})
+
+test("New session starts a draft with no project, whichever project's session or draft is open", () => {
+  for (const open of ["", "#session=in-p1", "#draft=p2", "#draft=none"]) expect(selectedIn(newSessionAddress(open))).toEqual({ draft: null })
 })
 
 test("the Workspaces button opens the workspace of the project being looked at, or else of the latest active session in one, or else the first project, and with no project none", () => {
