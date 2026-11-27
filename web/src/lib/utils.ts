@@ -23,6 +23,7 @@ export const NAMED_SIZES = [
   "tile-row",
   "tile-row-icon",
   "row-inset",
+  "row-indent",
   "tile-header",
   "tile-strip",
   "icon-picker",

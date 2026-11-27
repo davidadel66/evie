@@ -2,7 +2,7 @@ import { expect, test } from "bun:test"
 import type { SessionState, SessionSummary } from "../src/core/types.ts"
 import { addressAsOpened, addressOf, lookedAt, newSessionAddress, selectedIn } from "../web/src/address.ts"
 import { refreshWhileShown } from "../web/src/refresh.ts"
-import { ageWords, besides, deletedSelection, filterSessions, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealMove, workspaceToOpen } from "../web/src/session-list.ts"
+import { ageWords, besides, deletedSelection, filterSessions, groupByProject, groupSessions, inListOrder, nameFieldKey, nameToSave, PROJECT_COLOURS, projectColour, projectLookedAt, renamedByF2, revealSettled, toggleSettled, workspaceToOpen } from "../web/src/session-list.ts"
 
 // The session list's own rules, apart from its screen: how sessions are
 // grouped and ordered, and found by search and by project, and how a
@@ -22,7 +22,36 @@ const summary = (session: string, state: SessionState, ago: number, project: str
 })
 const ids = (sessions: SessionSummary[]) => sessions.map((each) => each.session)
 
-test("sessions that need the owner come first, then the active ones, each newest first, and working and settled ones are groups of their own, newest first", () => {
+test("the list groups sessions under their project: the project active last first, a project with no session after those, and General last; in a group those that need the owner, then the rest newest first, a working one among them, and its settled ones apart", () => {
+  const sessions = [
+    summary("general-new", "active", 1, null),
+    summary("p1-active", "active", 50, "p1"),
+    summary("p1-working", "working", 20, "p1"),
+    summary("p1-needs", "needs_you", 90, "p1"),
+    summary("p1-settled-old", "settled", 40_000, "p1"),
+    summary("p1-settled-new", "settled", 20_000, "p1"),
+    summary("p2-active", "active", 5, "p2"),
+    summary("general-settled", "settled", 30_000, null),
+  ]
+
+  const groups = groupByProject(sessions, ["p1", "p2", "p3", null])
+
+  expect(groups.map((each) => each.project)).toEqual(["p2", "p1", "p3", null])
+  expect(ids(groups[1]!.shown)).toEqual(["p1-needs", "p1-working", "p1-active"])
+  expect(ids(groups[1]!.settled)).toEqual(["p1-settled-new", "p1-settled-old"])
+  expect(groups[2]).toEqual({ project: "p3", shown: [], settled: [] })
+  expect(ids(groups[3]!.shown)).toEqual(["general-new"])
+  expect(ids(groups[3]!.settled)).toEqual(["general-settled"])
+
+  // With nothing always listed, as in a search, only the groups that have sessions,
+  // one of them a project not listed yet.
+  expect(groupByProject([summary("a", "active", 2, "new-project"), summary("b", "settled", 1, "p1")], []).map((each) => each.project)).toEqual(["p1", "new-project"])
+  expect(groupByProject([], [])).toEqual([])
+  // General is last even when it is the only one always listed first.
+  expect(groupByProject([summary("a", "active", 2, "p1")], [null, "p2"]).map((each) => each.project)).toEqual(["p1", "p2", null])
+})
+
+test("a project's sessions by state: those that need the owner, then the active ones, each newest first, and working and settled ones apart, newest first", () => {
   const sessions = [
     summary("active-old", "active", 300),
     summary("settled-new", "settled", 20_000),
@@ -43,7 +72,7 @@ test("sessions that need the owner come first, then the active ones, each newest
 
 // The projects' names, as the list knows them.
 const NAMES: Record<string, string> = { p1: "garden-planner", p2: "recipe-box" }
-const nameOf = (project: string | null) => (project === null ? "No project" : NAMES[project])
+const nameOf = (project: string | null) => (project === null ? "General" : NAMES[project])
 
 test("a search keeps the sessions whose name has every word of it, in any case and any order, and a session with no name yet is found as a new session", () => {
   const sessions = [
@@ -63,7 +92,7 @@ test("a search matches the project's name as well as the session's, so it narrow
 
   expect(ids(filterSessions(sessions, "recipe", nameOf))).toEqual(["cake"])
   expect(ids(filterSessions(sessions, "garden beds", nameOf))).toEqual(["beds"])
-  expect(ids(filterSessions(sessions, "no project", nameOf))).toEqual(["general"])
+  expect(ids(filterSessions(sessions, "general", nameOf))).toEqual(["general"])
   // A project not listed yet is matched by the session's name alone.
   expect(ids(filterSessions(sessions, "apple", () => undefined))).toEqual(["cake"])
 })
@@ -152,20 +181,21 @@ test("the Workspaces button opens the workspace of the project being looked at, 
   expect(workspaceToOpen(null, sessions, [])).toBeUndefined()
 })
 
-test("when the selected session moves into a closed group, that group opens so that it stays in sight, and nothing else opens or closes", () => {
-  const closed = { working: false, settled: false }
+test("when the selected session is settled while its project's settled sessions are closed, they open so that it stays in sight, and nothing else opens or closes", () => {
+  const closed: string[] = ["p2"]
 
-  expect(revealMove(closed, "active", "settled")).toEqual({ working: false, settled: true })
-  expect(revealMove(closed, "needs_you", "working")).toEqual({ working: true, settled: false })
-  expect(revealMove(closed, "settled", "working")).toEqual({ working: true, settled: false })
-  // Within its group, or to the top, or when the owner closes the group it is in, nothing changes.
-  expect(revealMove(closed, "settled", "settled")).toBe(closed)
-  expect(revealMove(closed, "settled", "active")).toBe(closed)
-  expect(revealMove(closed, "working", "needs_you")).toBe(closed)
+  expect(revealSettled(closed, "p1", "active", "settled")).toEqual(["p2", "p1"])
+  expect(revealSettled(closed, "", "working", "settled")).toEqual(["p2", ""])
+  // Not settled, or settled already, or its group's are open, nothing changes.
+  expect(revealSettled(closed, "p1", "settled", "settled")).toBe(closed)
+  expect(revealSettled(closed, "p1", "settled", "active")).toBe(closed)
+  expect(revealSettled(closed, "p1", "needs_you", "working")).toBe(closed)
+  expect(revealSettled(closed, "p2", "active", "settled")).toBe(closed)
   // Seen for the first time, as when the list is first drawn, it has not moved.
-  expect(revealMove(closed, undefined, "settled")).toBe(closed)
-  const open = { working: true, settled: true }
-  expect(revealMove(open, "active", "settled")).toBe(open)
+  expect(revealSettled(closed, "p1", undefined, "settled")).toBe(closed)
+
+  expect(toggleSettled(["p2"], "p1")).toEqual(["p2", "p1"])
+  expect(toggleSettled(["p2", "p1"], "p2")).toEqual(["p1"])
 })
 
 test("what goes stale is asked for again when the window has the focus back, and at each interval while the page is shown, not while it is hidden", async () => {
@@ -228,10 +258,11 @@ test("a selected session that has been deleted is found, and so is one whose sub
   expect(deletedSelection(undefined, ["s1"])).toBeUndefined()
 })
 
-test("the sessions in the list's order, for the shortcuts that move through it, are those shown: the top, then each open group's", () => {
-  const groups = groupSessions([summary("a", "active", 1), summary("b", "working", 2), summary("c", "settled", 3), summary("d", "needs_you", 4)])
-  expect(inListOrder(groups, { working: true, settled: false })).toEqual(["d", "a", "b"])
-  expect(inListOrder(groups, { working: false, settled: true })).toEqual(["d", "a", "c"])
+test("the sessions in the list's order, for the shortcuts that move through it, are those shown: each group's that are not settled, then its settled ones when they are open", () => {
+  const groups = groupByProject([summary("a", "active", 1), summary("b", "working", 2), summary("c", "settled", 3), summary("d", "needs_you", 4), summary("e", "active", 5, null), summary("f", "settled", 6, null)], [])
+  expect(inListOrder(groups, [])).toEqual(["d", "a", "b", "e"])
+  expect(inListOrder(groups, ["p1"])).toEqual(["d", "a", "b", "c", "e"])
+  expect(inListOrder(groups, [""])).toEqual(["d", "a", "b", "e", "f"])
 })
 
 test("the previous and next session are the ones above and below the selected one, none past either end, nor from one not shown, and with none selected the last and the first, as in T3 Code", () => {

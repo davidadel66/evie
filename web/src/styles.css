@@ -234,6 +234,9 @@
   /* A project's icon tile in a session row, and the icon on it, and in
      the conversation's header. */
   --spacing-tile-row: 18px;
+  /* The room before a session row's words under its project's title, so
+     that they start where the project's name does, after its tile. */
+  --spacing-row-indent: calc(var(--spacing-row-inset) + var(--spacing-tile-row) + var(--spacing-2));
   --spacing-tile-row-icon: 12px;
   /* A project's tile in the workspace header and in the workspace strip;
      the icon on the strip's is icon-md. */

@@ -3,11 +3,12 @@ import type { SessionState, SessionSummary } from "../../src/core/types.ts"
 import { addressOf, selectedIn } from "./address.ts"
 import { startedHere } from "./conversation.ts"
 import { Button, buttonVariants } from "./components/ui/button.tsx"
-import { CaretRight, MagnifyingGlass, PencilSimpleLine, SidebarLeft, SquaresFour } from "./icons.tsx"
+import { CaretRight, MagnifyingGlass, PencilSimpleLine, Plus, SidebarLeft, SquaresFour } from "./icons.tsx"
+import { NoProjectTile, ProjectIcon } from "./ProjectIcon.tsx"
 import { cn } from "./lib/utils.ts"
 import { toggleList, useListShown } from "./list-shown.ts"
 import { select, useSelected } from "./selection.ts"
-import { besides, deletedSelection, filterSessions, groupSessions, inListOrder, keepOpenGroups, openGroups, projectLookedAt, renamedByF2, revealMove, titleOf, workspaceToOpen, type OpenGroups } from "./session-list.ts"
+import { besides, deletedSelection, filterSessions, GENERAL, groupByProject, groupKey, inListOrder, keepOpenSettled, openSettled, projectLookedAt, renamedByF2, revealSettled, titleOf, toggleSettled, workspaceToOpen, type OpenSettled } from "./session-list.ts"
 import { DeleteDialog, DraftRow, SessionRow } from "./SessionRow.tsx"
 import type { Connection } from "./connection.ts"
 import { NewWorkspace } from "./NewWorkspace.tsx"
@@ -56,17 +57,18 @@ export function ListTop({ connection, sessions, settings }: { connection: Connec
 }
 
 // The session list, in the left column: a search above the sessions,
-// which are grouped with those that need the owner and the active ones at
-// the top, and the working and the settled ones in groups at the bottom of
-// the column that open and close. A new session is a draft, at the very
-// top, until its first message is sent.
+// which are grouped under their project, the project active last first and
+// General, the sessions with no project, last. A project's title has a plus
+// that starts a session in it; under it are its sessions that are not
+// settled, and a line that opens its settled ones. A new session is a
+// draft, at the top of its group, until its first message is sent.
 export function SessionList({ connection, sessions }: { connection: Connection; sessions: Sessions }) {
   const list = useSyncExternalStore(sessions.subscribe, sessions.state)
   // Whether the New workspace dialog is open, from the empty list's New workspace… button.
   const [making, setMaking] = useState(false)
   const selected = useSelected()
   const [search, setSearch] = useState("")
-  const [open, setOpen] = useState(openGroups)
+  const [open, setOpen] = useState(openSettled)
   // The session whose menu should have the focus back once it has moved.
   const [refocus, setRefocus] = useState<string>()
   // The session whose name is being typed in its row, and the one asked
@@ -82,21 +84,22 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   const startingIn = selectedSession !== undefined && !list.sessions.some((each) => each.session === selectedSession) ? startedHere(selectedSession) : undefined
   const projectOf = (project: string | null) => list.projects.find((each) => each.id === project)
 
-  function setGroups(next: OpenGroups) {
+  function setSettled(next: OpenSettled) {
     setOpen(next)
-    keepOpenGroups(next)
+    keepOpenSettled(next)
   }
 
-  // A selected session that moves into a closed group, as when the owner
-  // settles it, opens that group, so that it stays in sight.
-  const selectedState = list.sessions.find((each) => each.session === selectedSession)?.state
+  // A selected session settled while its project's settled ones are closed,
+  // as when the owner settles it, opens them, so that it stays in sight.
+  const selectedSummary = list.sessions.find((each) => each.session === selectedSession)
+  const selectedState = selectedSummary?.state
   const seen = useRef<{ session?: string; state?: SessionState }>({})
   useEffect(() => {
     const before = seen.current.session === selectedSession ? seen.current.state : undefined
     seen.current = { ...(selectedSession !== undefined && { session: selectedSession }), ...(selectedState !== undefined && { state: selectedState }) }
-    if (selectedState === undefined) return
-    const next = revealMove(open, before, selectedState)
-    if (next !== open) setGroups(next)
+    if (selectedSummary === undefined) return
+    const next = revealSettled(open, groupKey(selectedSummary.project), before, selectedSummary.state)
+    if (next !== open) setSettled(next)
   }, [selectedSession, selectedState])
 
   // F2 renames, as in T3 Code: while the list is shown, the row that has
@@ -148,8 +151,14 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
     return undefined
   }
 
-  const projectName = (project: string | null) => (project === null ? "No project" : projectOf(project)?.name)
-  const groups = groupSessions(filterSessions(list.sessions, search, projectName))
+  const projectName = (project: string | null) => (project === null ? GENERAL : projectOf(project)?.name)
+  // The draft's group, or that of a session just started from one, which may have no session yet.
+  const draftIn = selected !== undefined && "draft" in selected ? { project: selected.draft } : startingIn !== undefined ? { project: startingIn } : undefined
+  // Every project has a title to start a session from, and General; in a
+  // search, only those with a session that matches.
+  const searching = search.trim() !== ""
+  const always = [...(searching || !list.listed ? [] : [...list.projects.map((each) => each.id), null]), ...(draftIn !== undefined ? [draftIn.project] : [])]
+  const groups = groupByProject(filterSessions(list.sessions, search, projectName), always)
 
   // The session above or below the selected one, by its shortcut or from
   // the palette, as T3 Code moves through its threads.
@@ -183,12 +192,11 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
   }, [])
 
   const rows = (shown: SessionSummary[]) => (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col gap-0.5">
       {shown.map((session) => (
         <SessionRow
           key={session.session}
           session={session}
-          project={projectOf(session.project)}
           projects={list.projects}
           selected={session.session === selectedSession}
           now={now}
@@ -208,7 +216,6 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
       ))}
     </ul>
   )
-  const nothing = groups.top.length + groups.working.length + groups.settled.length === 0
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -236,41 +243,53 @@ export function SessionList({ connection, sessions }: { connection: Connection; 
             ),
         )}
         <div role="status">{notice !== undefined && <p className="px-row-inset pb-2 text-caption text-text-muted">{notice}</p>}</div>
-        {selected !== undefined && "draft" in selected && (
-          <ul className="mb-1 flex flex-col">
-            <DraftRow project={selected.draft} listed={projectOf(selected.draft)} href={addressOf(selected)} />
-          </ul>
-        )}
-        {/* A session started here from a draft stays in its place until its first message lists it. */}
-        {startingIn !== undefined && (
-          <ul className="mb-1 flex flex-col">
-            <DraftRow project={startingIn} listed={projectOf(startingIn)} href={addressOf(selected!)} />
-          </ul>
-        )}
-        {list.listed && nothing && (
-          <p className="px-row-inset text-caption text-text-muted">{list.sessions.length === 0 ? "No sessions yet. Start one with New session." : "No sessions match."}</p>
-        )}
         {list.listed && list.sessions.length === 0 && (
-          <Button variant="quiet" className="self-start" onClick={() => setMaking(true)}>
-            New workspace…
-          </Button>
+          <>
+            <p className="px-row-inset text-caption text-text-muted">No sessions yet. Start one with New session.</p>
+            <Button variant="quiet" className="self-start" onClick={() => setMaking(true)}>
+              New workspace…
+            </Button>
+          </>
         )}
-        {rows(groups.top)}
-        {/* Pinned to the bottom of the column, or below the rows when the list is longer than the column. */}
-        {groups.working.length + groups.settled.length > 0 && (
-          <div className="mt-auto flex flex-col gap-1 pt-6">
-            {groups.working.length > 0 && (
-              <Group name="Working" count={groups.working.length} open={open.working} toggle={() => setGroups({ ...open, working: !open.working })}>
-                {rows(groups.working)}
-              </Group>
-            )}
-            {groups.settled.length > 0 && (
-              <Group name="Settled" count={groups.settled.length} open={open.settled} toggle={() => setGroups({ ...open, settled: !open.settled })}>
-                {rows(groups.settled)}
-              </Group>
-            )}
-          </div>
-        )}
+        {list.listed && list.sessions.length > 0 && groups.length === 0 && <p className="px-row-inset text-caption text-text-muted">No sessions match.</p>}
+        <div className="flex flex-col gap-3">
+          {groups.map((group) => {
+            const key = groupKey(group.project)
+            const name = projectName(group.project) ?? ""
+            return (
+              <section key={key} aria-label={name} className="flex flex-col gap-0.5">
+                <div className="flex h-row-height items-center gap-2 pl-row-inset">
+                  {group.project === null ? <NoProjectTile /> : <ProjectIcon project={group.project} />}
+                  <h2 className="min-w-0 flex-1 truncate text-caption font-medium text-text">{name}</h2>
+                  <Button variant="icon" aria-label={`New session in ${name}`} title={`New session in ${name}`} onClick={() => select({ draft: group.project })} className="size-control-sm">
+                    <Plus />
+                  </Button>
+                </div>
+                {/* A session started here from a draft stays in its place until its first message lists it. */}
+                {draftIn?.project === group.project && (
+                  <ul className="flex flex-col">
+                    <DraftRow listed={projectOf(group.project)} href={addressOf(selected!)} />
+                  </ul>
+                )}
+                {rows(group.shown)}
+                {group.settled.length > 0 && (
+                  <>
+                    <Button
+                      variant="quiet"
+                      aria-expanded={open.includes(key)}
+                      onClick={() => setSettled(toggleSettled(open, key))}
+                      className="h-row-height justify-start gap-2 pr-row-inset pl-row-indent text-caption"
+                    >
+                      <span className="flex-1 text-left">{group.settled.length} settled</span>
+                      <CaretRight className={`size-icon-caret transition-transform motion-reduce:transition-none ${open.includes(key) ? "rotate-90" : ""}`} />
+                    </Button>
+                    {open.includes(key) && rows(group.settled)}
+                  </>
+                )}
+              </section>
+            )
+          })}
+        </div>
       </div>
       <DeleteDialog session={deleting} close={() => setDeleting(undefined)} remove={remove} />
     </div>
@@ -294,22 +313,6 @@ export function ListButton() {
     >
       <SidebarLeft />
     </Button>
-  )
-}
-
-// A group at the bottom of the list, under a heading that opens and closes
-// it: its name on the left, its count and a caret at the right end. A row
-// of the list, as T3 Code's, so it does not grow below 640px.
-function Group({ name, count, open, toggle, children }: { name: string; count: number; open: boolean; toggle(): void; children: ReactNode }) {
-  return (
-    <section aria-label={name} className="flex flex-col gap-1">
-      <Button variant="quiet" aria-expanded={open} onClick={toggle} className="h-row-height justify-start gap-2 px-row-inset text-caption">
-        <span className="flex-1 text-left">{name}</span>
-        <span>{count}</span>
-        <CaretRight className={`size-icon-caret transition-transform motion-reduce:transition-none ${open ? "rotate-90" : ""}`} />
-      </Button>
-      {open && children}
-    </section>
   )
 }
 
