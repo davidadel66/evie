@@ -6,13 +6,14 @@ import { ageWords, groupSessions } from "./session-list.ts"
 // its tabs, and a side chat with one of its sessions.
 
 // The workspace's tabs: its configured dashboards, Storage (its `.evie`
-// files), and Sessions. Memory is to come.
-export type WorkspaceTab = "dashboard" | "storage" | "sessions"
+// files), Sessions, and Settings (its instructions, and what is set for it
+// alone). Memory is to come.
+export type WorkspaceTab = "dashboard" | "storage" | "sessions" | "settings"
 
 // Where the owner is in a workspace, as the page's address keeps it after
 // #: `#workspace=<project id>`, with `&tab=dashboard&dashboard=<slug>`,
 // `&tab=storage` (and `&file=<path>` for a file open in `.evie`), or
-// `&tab=sessions`. When `tab` is undefined, the workspace opens on its
+// `&tab=sessions` or `&tab=settings`. When `tab` is undefined, the workspace opens on its
 // default tab: its first dashboard when it has dashboards, or Sessions
 // when it has none. `&chat=<session id>` keeps the session in its side
 // chat, or `&chat=new` for a new one there; without `chat`, the side chat
@@ -26,7 +27,7 @@ export type WorkspacePlace = {
 }
 
 // The concrete tab the workspace shows, once its dashboards have been listed.
-export type ResolvedWorkspaceTab = { tab: "dashboard"; dashboard: DashboardEntry } | { tab: "storage" } | { tab: "sessions" }
+export type ResolvedWorkspaceTab = { tab: "dashboard"; dashboard: DashboardEntry } | { tab: "storage" } | { tab: "sessions" } | { tab: "settings" }
 
 // The side chat's `chat` for a new session, which no session's id can be:
 // ids are UUIDs.
@@ -76,7 +77,7 @@ export function workspaceIn(hash: string): WorkspacePlace | undefined {
   const chat = named.get("chat")
   const file = named.get("file")
   let tab: WorkspaceTab | undefined
-  if (asked === "storage" || asked === "sessions") tab = asked
+  if (asked === "storage" || asked === "sessions" || asked === "settings") tab = asked
   else if (asked === "dashboard" && dashboard !== null && dashboard !== "") tab = "dashboard"
   return {
     workspace,
@@ -93,6 +94,7 @@ export function workspaceIn(hash: string): WorkspacePlace | undefined {
 export function resolveWorkspaceTab(place: WorkspacePlace, dashboards: readonly DashboardEntry[]): ResolvedWorkspaceTab {
   if (place.tab === "storage") return { tab: "storage" }
   if (place.tab === "sessions") return { tab: "sessions" }
+  if (place.tab === "settings") return { tab: "settings" }
   if (place.tab === "dashboard" && place.dashboard !== undefined) {
     const found = dashboards.find((entry) => entry.id === place.dashboard)
     if (found !== undefined) return { tab: "dashboard", dashboard: found }
@@ -117,7 +119,7 @@ export function addressOfWorkspace(place: WorkspacePlace): string {
   if (place.tab === "dashboard" && place.dashboard !== undefined && place.dashboard !== "") {
     named.set("tab", "dashboard")
     named.set("dashboard", place.dashboard)
-  } else if (place.tab === "storage" || place.tab === "sessions") {
+  } else if (place.tab === "storage" || place.tab === "sessions" || place.tab === "settings") {
     named.set("tab", place.tab)
   }
   if (place.chat !== undefined) named.set("chat", place.chat)

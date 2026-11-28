@@ -7,6 +7,7 @@ import { openConnection } from "../web/src/connection.ts"
 import { openSessions, type Sessions } from "../web/src/sessions.ts"
 import { deleteWords, openStorage, type Storage, type StorageState } from "../web/src/storage.ts"
 import { storageShown } from "../web/src/shown.ts"
+import { openProjectInstructions } from "../web/src/project-instructions.ts"
 import { followLooks, keptLook, onLooks } from "../web/src/project-look.ts"
 import { makeWorkspace, pickIcon } from "../web/src/workspace-actions.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
@@ -322,4 +323,33 @@ test("a listing still on its way when its folder is deleted is dropped, so the f
   await Bun.sleep(50)
 
   expect([...storage.state().folders.keys()]).toEqual([""])
+})
+
+test("a workspace's instructions are read once connected, and notes written are kept on the server and not taken away by a read", async () => {
+  const { connection, project, served } = await start()
+  await writeFile(join(served.run.projectFolder, "CLAUDE.md"), "Team rules.")
+  const view = openProjectInstructions(connection, project)
+  cleanups.push(async () => view.close())
+  while (view.state().read === undefined) await Bun.sleep(5)
+  expect(view.state().read).toEqual({ repo: { name: "CLAUDE.md", text: "Team rules.", cut: false }, ignored: [], notes: "", canWrite: true })
+
+  view.edit("Ask before pushing.")
+  expect(view.state().draft).toBe("Ask before pushing.")
+  expect(await view.save()).toBeUndefined()
+  while (view.state().read?.notes !== "Ask before pushing.\n") await Bun.sleep(5)
+  expect(view.state().draft).toBeUndefined()
+  expect(await Bun.file(join(served.run.projectFolder, ".evie", "instructions.md")).text()).toBe("Ask before pushing.\n")
+  expect(await Bun.file(join(served.run.projectFolder, "CLAUDE.md")).text()).toBe("Team rules.")
+})
+
+test("notes the server refuses stay as a draft, and the server's words come back", async () => {
+  const { connection, project } = await start()
+  const view = openProjectInstructions(connection, project)
+  cleanups.push(async () => view.close())
+  while (view.state().read === undefined) await Bun.sleep(5)
+
+  view.edit("x".repeat(33 * 1024))
+
+  expect(await view.save()).toContain("Shorten them and save again.")
+  expect(view.state().draft).toHaveLength(33 * 1024)
 })

@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test"
-import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { instructions, models, type Plugin } from "../src/index.ts"
@@ -127,4 +127,92 @@ test("the instructions are kept whichever order the plugins are listed in", asyn
   const prompt = await system()
   expect(prompt).toStartWith("Facts about this session.")
   expect(prompt).toContain("Use tabs.")
+})
+
+// ---- The owner's notes for a project ---------------------------------------------------------------
+
+test("the owner's notes for a project are given after the repository's file, and say they win", async () => {
+  const { run, system } = await start({ project: { "AGENTS.md": "Use tabs." } })
+  await mkdir(join(run.projectFolder, ".evie"))
+  await writeFile(join(run.projectFolder, ".evie", "instructions.md"), "Ask before pushing.\n")
+
+  const prompt = await system()
+
+  expect(prompt).toContain("# Instructions for this project")
+  expect(prompt).toContain("# The owner's notes for this project")
+  expect(prompt.indexOf("Use tabs.")).toBeLessThan(prompt.indexOf("Ask before pushing."))
+  expect(prompt).toContain("the notes win")
+})
+
+test("notes alone are given when the repository has no instruction file", async () => {
+  const { run, system } = await start()
+  await mkdir(join(run.projectFolder, ".evie"))
+  await writeFile(join(run.projectFolder, ".evie", "instructions.md"), "Answer in French.")
+
+  const prompt = await system()
+
+  expect(prompt).toContain("Answer in French.")
+  expect(prompt).not.toContain("# Instructions for this project")
+})
+
+test("read_instructions names the repository's file in use, the one ignored, and the notes", async () => {
+  const { run } = await start({ project: { "AGENTS.md": "From agents.", "CLAUDE.md": "From claude." } })
+  const project = run.project!.id
+
+  expect(await run.evie.send({ type: "read_instructions", project })).toEqual({
+    repo: { name: "AGENTS.md", text: "From agents.", cut: false },
+    ignored: ["CLAUDE.md"],
+    notes: "",
+    canWrite: true,
+  })
+})
+
+test("read_instructions for a project with no instruction files has no repo file", async () => {
+  const { run } = await start()
+
+  expect(await run.evie.send({ type: "read_instructions", project: run.project!.id })).toEqual({ ignored: [], notes: "", canWrite: true })
+})
+
+test("write_instructions keeps the notes in .evie/instructions.md and never touches the repository's file", async () => {
+  const { run, system } = await start({ project: { "CLAUDE.md": "Team rules." } })
+  const project = run.project!.id
+
+  await run.evie.send({ type: "write_instructions", project, text: "Ask before pushing." })
+
+  expect(await readFile(join(run.projectFolder, ".evie", "instructions.md"), "utf8")).toBe("Ask before pushing.\n")
+  expect(await readFile(join(run.projectFolder, "CLAUDE.md"), "utf8")).toBe("Team rules.")
+  expect((await run.evie.send({ type: "read_instructions", project })).notes).toBe("Ask before pushing.\n")
+  // The next message already has them.
+  expect(await system()).toContain("Ask before pushing.")
+})
+
+test("saving notes of only spaces removes the file", async () => {
+  const { run } = await start()
+  const project = run.project!.id
+  await run.evie.send({ type: "write_instructions", project, text: "Something." })
+
+  await run.evie.send({ type: "write_instructions", project, text: "  \n" })
+
+  await expect(stat(join(run.projectFolder, ".evie", "instructions.md"))).rejects.toThrow()
+})
+
+test("notes longer than 32 KiB are refused, saying what to do", async () => {
+  const { run } = await start()
+
+  await expect(run.evie.send({ type: "write_instructions", project: run.project!.id, text: "x".repeat(33 * 1024) })).rejects.toThrow("Shorten them and save again.")
+})
+
+test("notes are not written through a link, and not into a .evie folder that is a link", async () => {
+  const { run, home } = await start()
+  const project = run.project!.id
+  const elsewhere = join(home, "elsewhere.md")
+  await mkdir(join(run.projectFolder, ".evie"))
+  await symlink(elsewhere, join(run.projectFolder, ".evie", "instructions.md"))
+  await expect(run.evie.send({ type: "write_instructions", project, text: "Hello." })).rejects.toThrow("is a link")
+  expect(await Bun.file(elsewhere).exists()).toBe(false)
+
+  await rm(join(run.projectFolder, ".evie"), { recursive: true })
+  await symlink(home, join(run.projectFolder, ".evie"))
+  await expect(run.evie.send({ type: "write_instructions", project, text: "Hello." })).rejects.toThrow("not one evie keeps files in")
+  expect((await run.evie.send({ type: "read_instructions", project })).canWrite).toBe(false)
 })

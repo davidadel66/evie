@@ -744,6 +744,19 @@ export type ListedProject = Project & { branch?: string; git?: boolean; fromHome
 // design system, where each is a muted earthy tone.
 export type ProjectColour = "moss" | "mustard" | "maroon" | "rust" | "slate" | "plum"
 
+// A project's instructions, as `read_instructions` gives them. `repo` is the
+// repository's file the model is given: its name in the project folder, its
+// text, and whether the text was cut at the size limit. `ignored` names a
+// later file that also has text, which is not used: `CLAUDE.md` beside an
+// `AGENTS.md`. `notes` are the owner's own, written whole. `canWrite` is
+// false when notes cannot be kept for this project.
+export type ProjectInstructions = {
+  repo?: { name: string; text: string; cut: boolean }
+  ignored: string[]
+  notes: string
+  canWrite: boolean
+}
+
 // ---- Storage --------------------------------------------------------------------
 
 // One thing in a project's `.evie/` folder, as a workspace's Storage lists
@@ -1219,6 +1232,22 @@ export type Commands = {
   list_dashboards: {
     input: { project: string }
     output: { dashboards: DashboardEntry[] }
+  }
+  // What a project tells the model about how to work in it: the repository's
+  // own `AGENTS.md` or `CLAUDE.md` in use, which evie reads and never
+  // writes, and the owner's notes for the project, kept in
+  // `.evie/instructions.md`.
+  read_instructions: {
+    input: { project: string }
+    output: ProjectInstructions
+  }
+  // Replaces the owner's notes for a project, from the next message on. Notes
+  // with nothing but spaces remove the file. Refused when the notes are
+  // longer than 32 KiB, or when the project's `.evie` folder is a link or is
+  // inside evie's data folder. The repository's own file is never written.
+  write_instructions: {
+    input: { project: string; text: string }
+    output: void
   }
 }
 

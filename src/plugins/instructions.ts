@@ -1,28 +1,26 @@
-import { readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { dataFolder } from "../core/evie.ts"
+import { notesPath, readInstructions, repoInstructions, type Instructions } from "../core/instructions.ts"
 import type { Plugin } from "../core/types.ts"
 
 // The built-in plugin for instruction files. The owner writes how they want
 // Evie to work, once, in a file; this adds it to what the model is told.
 //
-// There are two files: one in the data folder, for every project, and one in
-// a project's own folder. They are added to the end of the system prompt, in
-// that order, before every request. The system prompt is the start of every
-// request, so as long as the files do not change, the start of each request
-// matches the last and the provider's prompt cache keeps working.
+// There are three files: one in the data folder, for every project, and two
+// for a project: the repository's own `AGENTS.md` (or `CLAUDE.md`), and the
+// owner's notes for the project in `.evie/instructions.md` (see
+// `core/instructions.ts`). They are added to the end of the system prompt, in
+// that order, so the notes win on a conflict. The system prompt is the start
+// of every request, so as long as the files do not change, the start of each
+// request matches the last and the provider's prompt cache keeps working.
 //
 // The files are read again for each request, so an edit takes effect at
 // once. That restarts the prompt cache once.
 
-// The names a project's file may have, in the order they are looked for.
-const PROJECT_FILES = ["AGENTS.md", "CLAUDE.md"]
 const GLOBAL_FILE = "AGENTS.md"
 
 // The owner's own instruction file, in the data folder.
 export const ownInstructionsFile = (home: string) => join(home, GLOBAL_FILE)
-// The most of one file that is used.
-const MAX_BYTES = 32 * 1024
 
 export type InstructionsOptions = {
   // The folder the owner's own instruction file is in. Defaults to the usual data folder.
@@ -50,11 +48,14 @@ export function instructions(options: InstructionsOptions = {}): Plugin {
         }
 
         if (host.project) {
-          for (const name of PROJECT_FILES) {
-            const fromProject = await readInstructions(join(host.project.folder, name))
-            if (!fromProject) continue
-            sections.push(`# Instructions for this project\n\nThese were written for this project. Follow them. ${have(fromProject)}\n\n${fromProject.text}`)
-            break
+          const { used } = await repoInstructions(host.project.folder)
+          if (used) {
+            sections.push(`# Instructions for this project\n\nThese were written for this project. Follow them. ${have(used)}\n\n${used.text}`)
+          }
+          const file = notesPath(host.project.folder, home)
+          const notes = file === undefined ? undefined : await readInstructions(file)
+          if (notes) {
+            sections.push(`# The owner's notes for this project\n\nThe owner wrote these for this project alone, in evie. Follow them; where they differ from the project's own instructions, the notes win. ${have(notes)}\n\n${notes.text}`)
           }
         }
 
@@ -64,20 +65,4 @@ export function instructions(options: InstructionsOptions = {}): Plugin {
       })
     },
   }
-}
-
-type Instructions = { path: string; text: string; cut: boolean }
-
-// A file's text, or undefined when it is missing or has nothing in it. A
-// file over the limit is cut at the end of a line, with a note saying so.
-async function readInstructions(path: string): Promise<Instructions | undefined> {
-  const bytes = await readFile(path).catch(() => undefined)
-  if (!bytes) return undefined
-  let text = bytes.subarray(0, MAX_BYTES).toString("utf8")
-  if (bytes.length > MAX_BYTES) {
-    const lastBreak = text.lastIndexOf("\n")
-    text = `${(lastBreak > 0 ? text.slice(0, lastBreak) : text.replace(/�+$/, "")).trimEnd()}\n\n[This file is longer than 32 KiB, so the rest was left out. Read ${path} if you need it.]`
-  }
-  text = text.trim()
-  return text === "" ? undefined : { path, text, cut: bytes.length > MAX_BYTES }
 }

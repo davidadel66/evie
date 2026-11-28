@@ -16,6 +16,7 @@ import { openSettings, sessionViewLeft } from "./selection.ts"
 import { titleOf } from "./session-list.ts"
 import type { SessionList, Sessions } from "./sessions.ts"
 import { Later, StorageView } from "./StorageView.tsx"
+import { WorkspaceSettings } from "./WorkspaceSettings.tsx"
 import {
   addressOfWorkspace,
   NEW_CHAT,
@@ -86,7 +87,7 @@ export function WorkspaceView({ place, state, connection, sessions }: { place: W
 // another workspace keeps Storage or Sessions open; from a dashboard, it
 // opens on the other workspace's own first tab.
 function Strip({ list, place, back, connection, sessions }: { list: SessionList; place: WorkspacePlace; back: string; connection: Connection; sessions: Sessions }) {
-  const carryTab = place.tab === "storage" || place.tab === "sessions" ? place.tab : undefined
+  const carryTab = place.tab === "storage" || place.tab === "sessions" || place.tab === "settings" ? place.tab : undefined
   return (
     <nav aria-label="Workspaces" className="flex w-rail-width shrink-0 flex-col items-center gap-2 overflow-y-auto border-r border-line bg-bg-side py-2">
       <a href={back} aria-label="Back to the session list" title="Back to the session list" className={cn(buttonVariants({ variant: "icon" }), "size-tile-strip [&>svg]:size-icon-md")}>
@@ -184,6 +185,8 @@ function WorkspaceContent({
           <DashboardView project={project} dashboard={resolved.dashboard} />
         ) : resolved.tab === "storage" ? (
           <StorageView connection={connection} project={project} place={place} now={now} />
+        ) : resolved.tab === "settings" ? (
+          <WorkspaceSettings connection={connection} project={project} />
         ) : (
           <SessionsTab list={list} place={place} now={now} />
         )}
@@ -194,11 +197,11 @@ function WorkspaceContent({
 
 // The workspace's header, in one row: its tile and name, which open the
 // picker of its icon and colour; its dashboards as tabs after its name;
-// Storage, Sessions and Memory pinned to the right, Memory not yet there;
+// Storage, Sessions, Settings and Memory pinned to the right, Memory not yet there;
 // and the toggle that hides and shows the side chat. Where the row is short,
 // the name gives way, cut with an ellipsis, down to a width it always keeps,
-// and then the dashboards' tabs scroll sideways, while Storage, Sessions
-// and Memory stay where they are. The open tab's line lies on the header's
+// and then the dashboards' tabs scroll sideways, while Storage, Sessions,
+// Settings and Memory stay where they are. The open tab's line lies on the header's
 // own line.
 function Header({
   project,
@@ -254,6 +257,11 @@ function Header({
             name="Sessions"
             href={addressOfWorkspace({ workspace: place.workspace, tab: "sessions", ...(place.chat !== undefined && { chat: place.chat }) })}
             current={resolved?.tab === "sessions"}
+          />
+          <Tab
+            name="Settings"
+            href={addressOfWorkspace({ workspace: place.workspace, tab: "settings", ...(place.chat !== undefined && { chat: place.chat }) })}
+            current={resolved?.tab === "settings"}
           />
           <span aria-disabled="true" className="flex shrink-0 items-center gap-2 text-label text-text-muted">
             Memory
