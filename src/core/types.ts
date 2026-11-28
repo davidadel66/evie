@@ -217,7 +217,10 @@ export type Request = {
 // prompt cache, which is charged at a fraction of the usual price, and
 // `cacheWriteTokens` how much it stored there for next time. Both are part
 // of `inputTokens`, and are given only when the provider reports them.
-export type Usage = { inputTokens: number; outputTokens: number; cachedTokens?: number; cacheWriteTokens?: number }
+// `cost` is what the request was charged, in US dollars, when the provider
+// says; replies made before evie recorded it, and providers that do not
+// say, have none.
+export type Usage = { inputTokens: number; outputTokens: number; cachedTokens?: number; cacheWriteTokens?: number; cost?: number }
 
 // What a provider streams back: pieces of text as they are written, each
 // tool call once it is complete, and one finish chunk at the end. A request
@@ -744,6 +747,13 @@ export type ListedProject = Project & { branch?: string; git?: boolean; fromHome
 // design system, where each is a muted earthy tone.
 export type ProjectColour = "moss" | "mustard" | "maroon" | "rust" | "slate" | "plum"
 
+// What was used in one stretch of time, as `read_usage` gives it. `cost` adds
+// up only the replies that have one; `unpriced` is how many replies in the
+// stretch have none, such as those made before evie recorded it, so a client
+// can say the cost is short by them.
+export type UsagePeriod = { sessions: number; replies: number; inputTokens: number; outputTokens: number; cachedTokens: number; cost: number; unpriced: number }
+export type ProjectUsage = { today: UsagePeriod; week: UsagePeriod; month: UsagePeriod; all: UsagePeriod }
+
 // A project's instructions, as `read_instructions` gives them. `repo` is the
 // repository's file the model is given: its name in the project folder, its
 // text, and whether the text was cut at the size limit. `ignored` names a
@@ -1232,6 +1242,15 @@ export type Commands = {
   list_dashboards: {
     input: { project: string }
     output: { dashboards: DashboardEntry[] }
+  }
+  // What a workspace has used, summed from its sessions' logs, subagents
+  // included: for today (since midnight on the server's clock), the last 7
+  // days, the last 30 days, and all time. Only replies in the logs are
+  // counted: the summaries compaction writes and the names given to sessions
+  // are not logged, so they are not.
+  read_usage: {
+    input: { project: string }
+    output: ProjectUsage
   }
   // What a project tells the model about how to work in it: the repository's
   // own `AGENTS.md` or `CLAUDE.md` in use, which evie reads and never

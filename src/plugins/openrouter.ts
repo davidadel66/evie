@@ -286,6 +286,8 @@ type WireChunk = {
     prompt_tokens?: number
     completion_tokens?: number
     prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number } | null
+    // What the request was charged, in dollars. Every response carries it.
+    cost?: number | null
   }
 }
 
@@ -352,6 +354,7 @@ async function* readReply(response: Response, signal: AbortSignal): AsyncGenerat
         outputTokens: chunk.usage.completion_tokens ?? 0,
         ...(typeof cached === "number" && { cachedTokens: cached }),
         ...(typeof written === "number" && { cacheWriteTokens: written }),
+        ...(typeof chunk.usage.cost === "number" && chunk.usage.cost >= 0 && { cost: chunk.usage.cost }),
       }
     }
   }

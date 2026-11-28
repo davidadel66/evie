@@ -8,6 +8,7 @@ import { openSessions, type Sessions } from "../web/src/sessions.ts"
 import { deleteWords, openStorage, type Storage, type StorageState } from "../web/src/storage.ts"
 import { storageShown } from "../web/src/shown.ts"
 import { openProjectInstructions } from "../web/src/project-instructions.ts"
+import { cachedWords, costWords, openProjectUsage, tokenWords } from "../web/src/project-usage.ts"
 import { followLooks, keptLook, onLooks } from "../web/src/project-look.ts"
 import { makeWorkspace, pickIcon } from "../web/src/workspace-actions.ts"
 import { scriptedProvider } from "./support/scripted-provider.ts"
@@ -352,4 +353,20 @@ test("notes the server refuses stay as a draft, and the server's words come back
 
   expect(await view.save()).toContain("Shorten them and save again.")
   expect(view.state().draft).toHaveLength(33 * 1024)
+})
+
+test("a workspace's usage is read once connected, and again when asked", async () => {
+  const { connection, project, served } = await start()
+  const view = openProjectUsage(connection, project)
+  cleanups.push(async () => view.close())
+  while (view.state().read === undefined) await Bun.sleep(5)
+  expect(view.state().read!.all.replies).toBe(0)
+  expect(served.run.project!.id).toBe(project)
+})
+
+test("tokens are put in short words, a small cost is not shown as nothing, and the cache's share is a percentage", () => {
+  expect([0, 950, 1234, 12_345, 123_456, 2_100_000].map(tokenWords)).toEqual(["0", "950", "1.23k", "12.3k", "123k", "2.1M"])
+  expect([0, 0.0004, 0.5, 4.123].map(costWords)).toEqual(["$0.00", "$0.0004", "$0.50", "$4.12"])
+  expect(cachedWords({ sessions: 1, replies: 1, inputTokens: 200, outputTokens: 1, cachedTokens: 182, cost: 0, unpriced: 0 })).toBe("91%")
+  expect(cachedWords({ sessions: 0, replies: 0, inputTokens: 0, outputTokens: 0, cachedTokens: 0, cost: 0, unpriced: 0 })).toBeUndefined()
 })
