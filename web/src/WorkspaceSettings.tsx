@@ -1,20 +1,24 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react"
-import type { ListedProject } from "../../src/core/types.ts"
+import type { ListedProject, ProjectUsage, UsagePeriod } from "../../src/core/types.ts"
 import { Button } from "./components/ui/button.tsx"
 import type { Connection } from "./connection.ts"
+import { cachedWords, costWords, openProjectUsage, tokenWords, type ProjectUsageView } from "./project-usage.ts"
 import { openProjectInstructions, type ProjectInstructionsView } from "./project-instructions.ts"
 import { Words } from "./Words.tsx"
 
 // The workspace's Settings tab: what is set for this workspace alone, in
 // sections divided by lines, as the Storage tab's content sits on the page
 // with no cards. Its sections are read from evie's server as the tab opens.
-// For now it holds the workspace's instructions: the repository's own
+// It holds the workspace's usage: tokens and cost for today, the last 7 days,
+// the last 30 days and all time, summed from its sessions' logs; and its
+// instructions: the repository's own
 // `AGENTS.md` or `CLAUDE.md`, shown as it is and never written, and the
 // owner's notes for this workspace, kept in `.evie/instructions.md` and
 // given to the model after the repository's file.
 export function WorkspaceSettings({ connection, project }: { connection: Connection; project: ListedProject }) {
   return (
     <section aria-label="Workspace settings" className="flex max-w-settings-content flex-col px-gutter py-5 [&>*+*]:mt-6 [&>*+*]:border-t [&>*+*]:border-line [&>*+*]:pt-6">
+      <UsageSection connection={connection} project={project} />
       <InstructionsSection connection={connection} project={project} />
     </section>
   )
@@ -34,6 +38,101 @@ function Section({ title, about, children }: { title: string; about: ReactNode; 
 }
 
 const Code = ({ children }: { children: ReactNode }) => <code className="font-mono text-code">{children}</code>
+
+function UsageSection({ connection, project }: { connection: Connection; project: ListedProject }) {
+  const [opened, setOpened] = useState<{ project: string; view: ProjectUsageView }>()
+  useEffect(() => {
+    const view = openProjectUsage(connection, project.id)
+    setOpened({ project: project.id, view })
+    return () => view.close()
+  }, [connection, project.id])
+  if (opened?.project !== project.id) return null
+  return <Usage view={opened.view} />
+}
+
+const PERIODS: { key: keyof ProjectUsage; name: string }[] = [
+  { key: "today", name: "Today" },
+  { key: "week", name: "7 days" },
+  { key: "month", name: "30 days" },
+  { key: "all", name: "All time" },
+]
+
+function Usage({ view }: { view: ProjectUsageView }) {
+  const { read, problem } = useSyncExternalStore(view.subscribe, view.state)
+  const about = (
+    <p>
+      What this workspace's sessions, and the subagents they started, have used, added up from their replies. The cost is what the provider charged; replies made before evie
+      began recording it show their tokens only.
+    </p>
+  )
+  if (read === undefined) {
+    return (
+      <Section title="Usage" about={about}>
+        <p role="status" className="text-caption text-text-muted">
+          {problem === undefined ? "Reading the usage from evie's server" : <Words text={problem} />}
+        </p>
+      </Section>
+    )
+  }
+  return (
+    <Section title="Usage" about={about}>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[32rem] text-left text-body">
+          <thead>
+            <tr className="text-caption text-text-muted">
+              <th scope="col" className="py-1 pr-4 font-normal">
+                <span className="sr-only">Period</span>
+              </th>
+              {["Cost", "Sent", "Written", "From cache", "Sessions"].map((name) => (
+                <th key={name} scope="col" className="py-1 pr-4 text-right font-normal">
+                  {name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {PERIODS.map(({ key, name }) => (
+              <UsageRow key={key} name={name} period={read[key]} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {read.all.unpriced > 0 && (
+        <p className="text-caption text-text-muted">
+          {read.all.unpriced} {read.all.unpriced === 1 ? "reply" : "replies"} made before the cost was recorded {read.all.unpriced === 1 ? "has" : "have"} no cost, so the costs are short by them.
+        </p>
+      )}
+      <div className="flex justify-end">
+        <Button variant="quiet" onClick={() => view.refresh()}>
+          Refresh
+        </Button>
+      </div>
+    </Section>
+  )
+}
+
+function UsageRow({ name, period }: { name: string; period: UsagePeriod }) {
+  const cells = [
+    // A period with replies none of which has a cost has none to show.
+    period.replies > 0 && period.unpriced === period.replies ? "–" : costWords(period.cost),
+    tokenWords(period.inputTokens),
+    tokenWords(period.outputTokens),
+    cachedWords(period) ?? "–",
+    String(period.sessions),
+  ]
+  return (
+    <tr className="border-t border-line">
+      <th scope="row" className="py-2 pr-4 font-medium text-text">
+        {name}
+      </th>
+      {cells.map((cell, index) => (
+        <td key={index} className="py-2 pr-4 text-right tabular-nums text-text">
+          {cell}
+        </td>
+      ))}
+    </tr>
+  )
+}
 
 function InstructionsSection({ connection, project }: { connection: Connection; project: ListedProject }) {
   const [opened, setOpened] = useState<{ project: string; view: ProjectInstructionsView }>()

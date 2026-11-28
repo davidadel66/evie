@@ -17,7 +17,7 @@ export type ScriptedCall = { name: string; input: Record<string, unknown> | stri
 // `cutOff` is a reply that hit its length limit, and `callAsText` one whose
 // tool call arrived as text.
 export type ScriptedReply =
-  | { text: string[]; error?: string; tooLong?: true; refused?: true; cutOff?: true; callAsText?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number } }
+  | { text: string[]; error?: string; tooLong?: true; refused?: true; cutOff?: true; callAsText?: true; calls?: ScriptedCall[]; usage?: { inputTokens: number; outputTokens: number; cost?: number } }
   | { fail: string }
   | { hang: true; text?: string[]; reports?: true }
 
