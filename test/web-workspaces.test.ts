@@ -178,3 +178,9 @@ test("while the side chat is hidden, nothing in it is being looked at", () => {
     expect(lookedAt("#workspace=p1&tab=sessions&chat=s2")).toEqual({ session: "s2", subagent: false })
   })
 })
+
+test("the Settings tab is kept in the address and resolves to itself", () => {
+  expect(addressOfWorkspace({ workspace: "p1", tab: "settings" })).toBe("#workspace=p1&tab=settings")
+  expect(workspaceIn("#workspace=p1&tab=settings&chat=s1")).toEqual({ workspace: "p1", tab: "settings", chat: "s1" })
+  expect(resolveWorkspaceTab({ workspace: "p1", tab: "settings" }, [])).toEqual({ tab: "settings" })
+})

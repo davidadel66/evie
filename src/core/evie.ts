@@ -16,6 +16,7 @@ import { branchOf, createProjects, inGit, keepEvieOutOfGit, makeProject } from "
 import { createQuestions } from "./questions.ts"
 import { createAttachments } from "./attachments.ts"
 import { listProjectFiles } from "./project-files.ts"
+import { readProjectInstructions, writeProjectInstructions } from "./instructions.ts"
 import { countStorage, deleteStorage, listStorage, readStorage, storageFileAt } from "./storage.ts"
 import { openStore } from "./store.ts"
 import { createSummaries, nameOf } from "./summaries.ts"
@@ -1229,6 +1230,10 @@ export async function createEvie(options: EvieOptions): Promise<Core> {
           return (await readGitStatus(projectFor(command.project), typeof command.base === "string" ? command.base : undefined)) as Output
         case "list_dashboards":
           return { dashboards: await dashboardsOf(projectFor(command.project)) } as Output
+        case "read_instructions":
+          return (await readProjectInstructions(projectFor(command.project).folder, home)) as Output
+        case "write_instructions":
+          return (await writeProjectInstructions(projectFor(command.project).folder, home, command.text)) as Output
         default:
           // Reached only by a client that is not type-checked.
           throw new Error(`Unknown command "${(command as { type: unknown }).type}".`)

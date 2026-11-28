@@ -132,7 +132,7 @@ const REMEMBERED = 200
 // from a workspace's Storage, a diff, or a changed file's whole sides: they
 // are not remembered, so they take none of the places. Carried out again,
 // they change nothing.
-const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "count_storage", "list_files", "read_changes", "read_file_sides", "list_dashboards"])
+const NOT_REMEMBERED: ReadonlySet<string> = new Set(["list_storage", "read_storage", "count_storage", "list_files", "read_changes", "read_file_sides", "list_dashboards", "read_instructions"])
 // The images an attachment is given back as, to show: those a browser
 // draws and never runs.
 const SHOWN = ["image/png", "image/jpeg", "image/gif", "image/webp"]
